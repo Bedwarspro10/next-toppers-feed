@@ -1,0 +1,260 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── helpers ──────────────────────────────────────────────
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Accepts both "admin" and "owner" roles
+    function isAdmin() {
+      let adminDoc = get(/databases/$(database)/documents/admins/$(request.auth.uid));
+      return isAuth() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+        (adminDoc.data.role == "admin" || adminDoc.data.role == "owner");
+    }
+
+    // ── users ─────────────────────────────────────────────────
+    match /users/{userId} {
+      allow read:   if isAuth();
+      allow create: if isAuth();
+      allow update: if isAuth() && (request.auth.uid == userId || isAdmin());
+      allow delete: if isAdmin();
+
+      match /seenAnnouncements/{annId} {
+        allow read, write: if isAuth() && request.auth.uid == userId;
+      }
+
+      match /achievements/{achId} {
+        allow read:  if isAuth() && request.auth.uid == userId;
+        allow write: if isAuth() && request.auth.uid == userId;
+      }
+    }
+
+    // ── leaderboard ────────────────────────────────────────────
+    // Public read — all authenticated users can see the leaderboard
+    // Writes only by authenticated users (their own) or admin
+    match /leaderboard/{userId} {
+      allow read:   if isAuth();
+      allow create: if isAuth() && request.resource.data.uid == request.auth.uid;
+      allow update: if isAuth() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // ── admins ────────────────────────────────────────────────
+    match /admins/{userId} {
+      allow read:  if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // ── community / group chat ────────────────────────────────
+    match /communityMessages/{msgId} {
+      allow read:   if isAuth();
+      allow create: if isAuth() && request.resource.data.senderId == request.auth.uid;
+      allow delete: if isAdmin()
+                    || (isAuth() && resource.data.senderId == request.auth.uid);
+      allow update: if isAdmin();
+    }
+
+    // ── private chats ─────────────────────────────────────────
+    // chatId = "{uid1}_{uid2}" where uids are sorted alphabetically
+    match /privateChats/{chatId} {
+      function isParticipant() {
+        let parts = chatId.split("_");
+        return isAuth() &&
+          (request.auth.uid == parts[0] || request.auth.uid == parts[1]);
+      }
+
+      allow read, write: if isParticipant() || isAdmin();
+
+      match /messages/{msgId} {
+        allow read:   if isParticipant() || isAdmin();
+        allow create: if (isParticipant() || isAdmin())
+                      && request.resource.data.senderId == request.auth.uid;
+        allow delete: if isAdmin()
+                      || (isParticipant() && resource.data.senderId == request.auth.uid);
+        allow update: if isAdmin();
+      }
+    }
+
+    // ── private chat meta (unread counts + last message preview)
+    match /privateChatMeta/{chatId} {
+      function isParticipantMeta() {
+        let parts = chatId.split("_");
+        return isAuth() &&
+          (request.auth.uid == parts[0] || request.auth.uid == parts[1]);
+      }
+
+      allow read, write: if isParticipantMeta() || isAdmin();
+    }
+
+    // ── premium requests ──────────────────────────────────────
+    // Users create their own requests; admins manage all.
+    // screenshotBase64 is stored in the document — same rules apply.
+    match /premiumRequests/{reqId} {
+      allow create: if isAuth()
+                    && request.resource.data.uid == request.auth.uid;
+      allow read:   if isAuth() && (
+                      resource.data.uid == request.auth.uid || isAdmin()
+                    );
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ── premium users ─────────────────────────────────────────
+    // Only the owner user (read own status) or admin (full write).
+    match /premiumUsers/{userId} {
+      allow read:  if isAuth() && (request.auth.uid == userId || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // ── contact messages ──────────────────────────────────────
+    match /contactMessages/{msgId} {
+      allow create: if isAuth();
+      allow read, update, delete: if isAdmin();
+    }
+
+    // ── announcements ─────────────────────────────────────────
+    // Public read — guests can see announcements on home page.
+    match /announcements/{annId} {
+      allow read:                   if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── subjects ──────────────────────────────────────────────
+    // Public read — guests can browse subjects.
+    match /subjects/{subId} {
+      allow read:                   if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── lecture folders ───────────────────────────────────────
+    match /lecture_folders/{folderId} {
+      allow read:                   if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── files (study materials) ───────────────────────────────
+    match /files/{fileId} {
+      allow read:                   if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── lectures (videos) ─────────────────────────────────────
+    match /lectures/{lectId} {
+      allow read:                   if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── youtube channels ──────────────────────────────────────
+    match /yt_channels/{chanId} {
+      allow read:                   if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── scanned course content (read-only to authenticated website users) ──
+    // The external scanner owns writes through its separate operational rules.
+    // This website only reads the generated course catalog.
+    match /courses/{document=**} {
+      allow read: if isAuth();
+      allow write: if false;
+    }
+
+    // ── branding ──────────────────────────────────────────────
+    match /branding/{docId} {
+      allow read:                   if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── coupons ───────────────────────────────────────────────
+    // PUBLIC read — unauthenticated and authenticated users both need to
+    // validate coupon codes at checkout (before sign-in in some flows).
+    // Querying by "code" field only (no compound index needed) is safe
+    // because coupon codes are meaningless without a valid account.
+    // Only admins can create / modify / delete coupons.
+    match /coupons/{couponId} {
+      allow read:                   if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── coupon usage tracking ─────────────────────────────────
+    // Users can log their own usage and read their own records.
+    // Admins can read/update all for auditing.
+    match /couponUsage/{usageId} {
+      allow create: if isAuth() && request.resource.data.uid == request.auth.uid;
+      allow read:   if isAuth() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow update, delete: if isAdmin();
+    }
+
+    // ── site settings (maintenance mode, etc.) ────────────────
+    // Public read so Layout.tsx can check maintenance without login.
+    match /siteSettings/{docId} {
+      allow read:                   if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── subject popup configs ─────────────────────────────────
+    // Public read — popup configs are loaded before auth check.
+    // Only admins can create / modify / delete popup configs.
+    match /subjectPopups/{subjectId} {
+      allow read:                   if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── site banners (startup popup + homepage top banner) ────
+    // Public read — banners shown to all visitors including guests.
+    // Only admins can manage banners.
+    match /siteBanners/{bannerId} {
+      allow read:                   if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── practice tests ────────────────────────────────────────
+    // Public read — test list visible to all (premium lock enforced client-side).
+    // Only admins create / edit / delete tests.
+    match /tests/{testId} {
+      allow read:                   if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── test attempts ─────────────────────────────────────────
+    // Users create their own attempts and read only their own.
+    // Admins can read all attempts for analytics.
+    match /testAttempts/{attemptId} {
+      allow create: if isAuth()
+                    && request.resource.data.userId == request.auth.uid;
+      allow read:   if isAuth() && (
+                      resource.data.userId == request.auth.uid || isAdmin()
+                    );
+      allow update, delete: if isAdmin();
+    }
+
+    // ── content ratings ───────────────────────────────────────
+    // Path: ratings/{docKey}/users/{uid}    → star rating + feedback
+    //       ratings/{docKey}/meta/aggregate → computed avg + count
+    //
+    // • Any authenticated user can read all ratings (for avg display).
+    // • A user can only write to their OWN /users/{uid} doc.
+    // • The aggregate doc is recomputed client-side after every rating
+    //   save, so any authenticated user can update it.
+    // • Admins can delete/reset any rating doc.
+    match /ratings/{docKey} {
+      allow read: if isAuth();
+
+      match /users/{uid} {
+        allow read:          if isAuth();
+        allow create, update: if isAuth() && request.auth.uid == uid;
+        allow delete:         if isAdmin()
+                              || (isAuth() && request.auth.uid == uid);
+      }
+
+      match /meta/{metaDoc} {
+        allow read:           if isAuth();
+        allow create, update: if isAuth();
+        allow delete:         if isAdmin();
+      }
+    }
+  }
+}

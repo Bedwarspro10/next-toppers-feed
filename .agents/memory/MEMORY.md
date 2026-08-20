@@ -1,0 +1,5 @@
+- [ContentRating architecture](content-rating.md) — ratings stored at `ratings/{id}_{type}/users/{uid}`, aggregate at `.../meta/aggregate`; RatingPrompt is aliased to RatingPopup for backward compat
+- [Icon style prop pattern](icon-style-pattern.md) — lucide-react icons in dynamic component maps reject `style` prop via TS; wrap in `<span style={...}>` instead
+- [Leaderboard Firestore fallback](leaderboard-firestore.md) — `where` + `orderBy` on leaderboard requires composite index; always wrap in try/fallback that retries without `where`
+- [Coin & Survey System](coin-survey-system.md) — full architecture: earning rates, anti-abuse rules, Firestore collections, redemption plans, and all files touched
+- [Archive restore](archive-restore.md) — stage uploaded archives outside the project before replacing a root that contains the upload

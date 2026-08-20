@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Aarambh — NextToppers"
+version = "1.0.0"
+id = "artifacts/aarambh"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22279
+
+[services.development]
+run = "pnpm --filter @workspace/aarambh run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/aarambh", "run", "build" ]
+publicDir = "artifacts/aarambh/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22279"
+BASE_PATH = "/"

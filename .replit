@@ -1,0 +1,80 @@
+modules = ["nodejs-20", "web", "bash"]
+
+[deployment]
+router = "application"
+deploymentTarget = "autoscale"
+
+[deployment.postBuild]
+args = ["pnpm", "store", "prune"]
+env = { "CI" = "true" }
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "PORT=5000 BASE_PATH=/ pnpm --filter @workspace/aarambh run dev"
+waitForPort = 5000
+
+[agent]
+stack = "BEST_EFFORT_FALLBACK"
+expertMode = true
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 20000
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[[ports]]
+localPort = 8080
+externalPort = 8080
+
+[[ports]]
+localPort = 8081
+externalPort = 80
+
+[[ports]]
+localPort = 8082
+externalPort = 3001
+
+[[ports]]
+localPort = 22279
+externalPort = 3000
+
+[nix]
+channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+VITE_FIREBASE_AUTH_DOMAIN = "aarambh26-27.firebaseapp.com"
+VITE_FIREBASE_PROJECT_ID = "aarambh26-27"
+VITE_FIREBASE_STORAGE_BUCKET = "aarambh26-27.firebasestorage.app"
+VITE_FIREBASE_MESSAGING_SENDER_ID = "42465208642"
+VITE_FIREBASE_APP_ID = "1:42465208642:web:1b3629672d546c501c40db"
+VITE_CHAT_FIREBASE_AUTH_DOMAIN = "chatting2027-97f1b.firebaseapp.com"
+VITE_CHAT_FIREBASE_PROJECT_ID = "chatting2027-97f1b"
+VITE_CHAT_FIREBASE_STORAGE_BUCKET = "chatting2027-97f1b.firebasestorage.app"
+VITE_CHAT_FIREBASE_MESSAGING_SENDER_ID = "884874751382"
+VITE_CHAT_FIREBASE_APP_ID = "1:884874751382:web:f5314041e959778c3401b7"
+VITE_FIREBASE_API_KEY = "AIzaSyBdTbN0nNiR5nm2IIDl4xgS36e3AbKBmGs"
+VITE_YOUTUBE_API_KEY = "AIzaSyDqba0KvcBcZIxHU-ghj272Qd04Afw6PqU"
