@@ -11,11 +11,20 @@ const SUBJECT_KEYWORDS: Record<Exclude<SubjectId, "other">, string[]> = {
   hindi: ["hindi"],
 };
 
-// Only these two subjects are free — everything else follows the existing premium system.
-export const FREE_SUBJECTS: SubjectId[] = ["english", "hindi"];
+// All 5 core subjects are free to open — nothing is locked at the subject-entry level anymore.
+// ("it" / "ai" aren't part of this course-content system at all, see Subjects.tsx.)
+export const FREE_SUBJECTS: SubjectId[] = ["english", "hindi", "science", "maths", "sst"];
 
 export function isFreeSubject(subject: string): boolean {
   return (FREE_SUBJECTS as string[]).includes(subject);
+}
+
+// Within science / maths / sst, PDFs & other files are free but lecture (HLS/m3u8) content
+// stays behind premium. English & Hindi remain fully free, lectures included.
+export const LECTURE_LOCKED_SUBJECTS: SubjectId[] = ["science", "maths", "sst"];
+
+export function isLectureLockedSubject(subject: string): boolean {
+  return (LECTURE_LOCKED_SUBJECTS as string[]).includes(subject);
 }
 
 function normalize(s: string): string {

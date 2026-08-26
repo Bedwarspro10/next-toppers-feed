@@ -9,7 +9,7 @@
 
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { classifySubject, isFreeSubject, matchKnownChapter, chapterOrderIndex } from "@/lib/subjectRecognition";
+import { classifySubject, isLectureLockedSubject, matchKnownChapter, chapterOrderIndex } from "@/lib/subjectRecognition";
 
 interface RawContentDoc {
   courseId: string;
@@ -31,6 +31,7 @@ interface TreeNode extends RawContentDoc {
 /** Shapes matching SubjectDetail.tsx's existing Folder / FileDoc / LectureDoc types. */
 export interface CourseFolder {
   id: string; name: string; subject: string; order: number; parentFolderId?: string;
+  allPremium?: boolean; // true when every resource inside is premium-locked (e.g. a pure "Lectures" folder)
 }
 export interface CourseFileResource {
   kind: "file"; id: string; name: string; link: string; folderId?: string;
@@ -167,16 +168,18 @@ export async function getCourseDataForSubject(subject: string, refresh = false):
 
         const collectFiles = (node: TreeNode) => {
           if (!node.isFolder && node.status === "resolved" && node.resolvedUrl) {
-            const premium = !isFreeSubject(subject);
+            // PDFs & other files are always free. Lecture (HLS/m3u8) content is only
+            // locked behind premium for subjects in LECTURE_LOCKED_SUBJECTS — everything
+            // else (English/Hindi lectures included) stays free.
             if (isHls(node.resolvedUrl, node.fileType)) {
               resourcesByFolder[folderId!].push({
                 kind: "lecture", id: node.entityId, title: node.title, hlsUrl: node.resolvedUrl,
-                folderId, subject, order: 999, isPremium: premium,
+                folderId, subject, order: 999, isPremium: isLectureLockedSubject(subject),
               });
             } else if (isPdf(node.resolvedUrl, node.fileType)) {
               resourcesByFolder[folderId!].push({
                 kind: "file", id: node.entityId, name: node.title, link: node.resolvedUrl,
-                folderId, subject, category: "pdf", order: 999, isPremium: premium,
+                folderId, subject, category: "pdf", order: 999, isPremium: false,
               });
             }
             // Unresolved/pending/failed docs are intentionally skipped — no broken links shown.
@@ -191,6 +194,11 @@ export async function getCourseDataForSubject(subject: string, refresh = false):
       // (child.isFolder === false handled above via collectFiles fallback; nothing else to do here.)
     }
   }
+
+  folders.forEach((f) => {
+    const items = resourcesByFolder[f.id] ?? [];
+    f.allPremium = items.length > 0 && items.every((r) => !!r.isPremium);
+  });
 
   folders.sort((a, b) => a.order - b.order);
   return { folders, resourcesByFolder, generalResources };
