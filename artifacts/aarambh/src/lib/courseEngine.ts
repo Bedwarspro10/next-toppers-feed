@@ -7,7 +7,7 @@
 // this file is the only place those fields are touched; everything it returns
 // is already human-friendly.
 
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, doc, deleteDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { classifySubject, isLectureLockedSubject, matchKnownChapter, chapterOrderIndex } from "@/lib/subjectRecognition";
 
@@ -22,6 +22,7 @@ interface RawContentDoc {
   resolvedUrl: string;
   status: "resolved" | "pending" | "failed" | string;
   updatedAt: number;
+  docId: string; // actual Firestore document id within courses/{courseId}/content — needed for admin delete
 }
 
 interface TreeNode extends RawContentDoc {
@@ -36,10 +37,12 @@ export interface CourseFolder {
 export interface CourseFileResource {
   kind: "file"; id: string; name: string; link: string; folderId?: string;
   subject: string; type?: string; category?: string; order: number; isPremium?: boolean;
+  courseId: string; docId: string;
 }
 export interface CourseLectureResource {
   kind: "lecture"; id: string; title: string; hlsUrl?: string; folderId?: string;
   subject: string; category?: string; order: number; isPremium?: boolean;
+  courseId: string; docId: string;
 }
 export type CourseResource = CourseFileResource | CourseLectureResource;
 
@@ -79,7 +82,7 @@ function dedupe(docs: RawContentDoc[]): RawContentDoc[] {
 async function fetchCourseRaw(courseId: string, force = false): Promise<RawContentDoc[]> {
   if (!force && rawCache.has(courseId)) return rawCache.get(courseId)!;
   const snap = await getDocs(collection(db, "courses", courseId, "content"));
-  const docs = dedupe(snap.docs.map((d) => d.data() as RawContentDoc));
+  const docs = dedupe(snap.docs.map((d) => ({ ...(d.data() as RawContentDoc), docId: d.id, courseId })));
   rawCache.set(courseId, docs);
   return docs;
 }
@@ -175,11 +178,13 @@ export async function getCourseDataForSubject(subject: string, refresh = false):
               resourcesByFolder[folderId!].push({
                 kind: "lecture", id: node.entityId, title: node.title, hlsUrl: node.resolvedUrl,
                 folderId, subject, order: 999, isPremium: isLectureLockedSubject(subject),
+                courseId: node.courseId, docId: node.docId,
               });
             } else if (isPdf(node.resolvedUrl, node.fileType)) {
               resourcesByFolder[folderId!].push({
                 kind: "file", id: node.entityId, name: node.title, link: node.resolvedUrl,
                 folderId, subject, category: "pdf", order: 999, isPremium: false,
+                courseId: node.courseId, docId: node.docId,
               });
             }
             // Unresolved/pending/failed docs are intentionally skipped — no broken links shown.
@@ -207,4 +212,16 @@ export async function getCourseDataForSubject(subject: string, refresh = false):
 export function refreshCourseCache() {
   rawCache.clear();
   courseListCache.value = null;
+}
+
+/**
+ * Admin-only: permanently deletes one content doc (file or lecture) from
+ * courses/{courseId}/content/{docId} in Firestore. Also evicts that course's
+ * cached tree so the item disappears from the UI without a full page reload.
+ * Callers are responsible for checking admin permission before invoking this —
+ * this function performs no auth check itself, it just talks to Firestore.
+ */
+export async function deleteCourseContent(courseId: string, docId: string): Promise<void> {
+  await deleteDoc(doc(db, "courses", courseId, "content", docId));
+  rawCache.delete(courseId);
 }
