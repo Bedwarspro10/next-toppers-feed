@@ -460,6 +460,76 @@
     animation: slideInRight 0.22s ease forwards;
   }
 
+  /* ══════════════ HyperOS-style fluid spring animations ══════════════ */
+  /* Overshoot "pop" spring — mirrors MIUI/HyperOS bubble & sheet motion */
+  @keyframes hyperPopIn {
+    0%   { opacity: 0; transform: scale(0.72) translateY(10px); }
+    55%  { opacity: 1; transform: scale(1.035) translateY(-1px); }
+    80%  { transform: scale(0.99) translateY(0); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .animate-bubble-pop {
+    animation: hyperPopIn 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    transform-origin: bottom center;
+  }
+  [dir-mine="true"].animate-bubble-pop,
+  .animate-bubble-pop[data-mine="true"] {
+    transform-origin: bottom right;
+  }
+  .animate-bubble-pop[data-mine="false"] {
+    transform-origin: bottom left;
+  }
+
+  /* Soft sheet / modal spring rise */
+  @keyframes hyperSheetIn {
+    0%   { opacity: 0; transform: translateY(28px) scale(0.98); }
+    60%  { opacity: 1; transform: translateY(-3px) scale(1.005); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .animate-sheet-spring {
+    animation: hyperSheetIn 0.38s cubic-bezier(0.32, 1.4, 0.5, 1) both;
+  }
+
+  /* Tab / nav switch bounce for icons */
+  @keyframes hyperTabBounce {
+    0%   { transform: scale(1); }
+    35%  { transform: scale(0.82); }
+    65%  { transform: scale(1.18); }
+    100% { transform: scale(1); }
+  }
+  .animate-tab-bounce {
+    animation: hyperTabBounce 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* Snappy spring press-feedback, replaces linear press-scale where used */
+  .press-spring {
+    transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .press-spring:active {
+    transition-duration: 0.08s;
+    transform: scale(0.94);
+  }
+
+  /* Global tap feedback across the app — buttons & links get a subtle
+     HyperOS-esque spring squash without needing per-component classes */
+  button:not(:disabled):active,
+  a:active,
+  [role="button"]:not([aria-disabled="true"]):active {
+    transform: scale(0.965);
+  }
+  button:not(:disabled),
+  a,
+  [role="button"] {
+    transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* Stagger helper for spring pop-ins */
+  .pop-delay-1 { animation-delay: 0.03s; }
+  .pop-delay-2 { animation-delay: 0.06s; }
+  .pop-delay-3 { animation-delay: 0.09s; }
+  .pop-delay-4 { animation-delay: 0.12s; }
+  .pop-delay-5 { animation-delay: 0.15s; }
+
   /* Prevent zoom on input focus on iOS */
   input[type="text"],
   input[type="email"],
