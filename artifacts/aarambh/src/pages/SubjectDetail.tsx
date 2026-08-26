@@ -2,10 +2,6 @@ import { useEffect, useState, useRef, Component, useCallback } from "react";
 import type { ReactNode } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import GuestSignInModal from "@/components/GuestSignInModal";
-import {
-  collection, query, where, getDocs, onSnapshot
-} from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePremium } from "@/contexts/PremiumContext";
 import { usePremiumModal } from "@/contexts/PremiumModalContext";
@@ -21,6 +17,7 @@ import {
   Bookmark, BookmarkCheck, Minimize2, SkipBack, SkipForward, CheckCircle2
 } from "lucide-react";
 import Hls from "hls.js";
+import { motion, AnimatePresence } from "framer-motion";
 import { getCourseDataForSubject, type CourseFolder, type CourseResource } from "@/lib/courseEngine";
 
 /* ─── bookmark helpers (localStorage) ───────────────────────── */
@@ -64,6 +61,7 @@ function saveCW(item: CWItem) {
 interface Folder {
   id: string; name: string; subject: string;
   order: number; parentFolderId?: string;
+  allPremium?: boolean;
 }
 interface FileDoc {
   id: string; name: string; link: string; folderId?: string;
@@ -796,7 +794,7 @@ function Empty({ label }: { label: string }) {
 
 /* ─── automatic Firestore course-scanner content (new system) ───────────── */
 function courseFolderToFolder(f: CourseFolder): Folder {
-  return { id: f.id, name: f.name, subject: f.subject, order: f.order, parentFolderId: "" };
+  return { id: f.id, name: f.name, subject: f.subject, order: f.order, parentFolderId: "", allPremium: f.allPremium };
 }
 function courseResourceToResource(r: CourseResource): Resource {
   return r.kind === "file"
@@ -804,81 +802,35 @@ function courseResourceToResource(r: CourseResource): Resource {
     : { kind: "lecture", id: r.id, title: r.title, hlsUrl: r.hlsUrl, folderId: r.folderId, subject: r.subject, category: r.category, order: r.order, isPremium: r.isPremium };
 }
 
-/* ─── helpers to load data ────────────────────────────────── */
-async function loadPremiumLectures(subject: string): Promise<LectureDoc[]> {
-  const snap = await getDocs(
-    query(collection(db, "lectures"), where("subject", "==", subject), where("isPremium", "==", true))
-  ).catch(() => null);
-  if (!snap) return [];
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as LectureDoc)).sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
-}
-
+/* ─── helpers to load data ─────────────────────────────────
+   Every subject now reads exclusively from the Firestore course-scanner
+   data (courses/{courseId}/content via courseEngine.ts). The older manual
+   "files" / "lectures" / "lecture_folders" collections are no longer queried
+   or shown here. ────────────────────────────────────────── */
 async function loadFolders(subject: string, parentId: string | null): Promise<Folder[]> {
-  const snap = await getDocs(
-    query(collection(db, "lecture_folders"), where("subject", "==", subject))
-  ).catch(() => null);
-  const manual = snap ? snap.docs.map((d) => ({ id: d.id, ...d.data() } as Folder)) : [];
-
   if (parentId !== null) {
     // Course-scanner chapters are flattened one level deep (see courseEngine.ts) —
-    // they never have sub-folders, so only manually-created sub-folders apply here.
-    return manual.filter((f) => f.parentFolderId === parentId)
-                 .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+    // there are no sub-folders below a chapter.
+    return [];
   }
-
-  const manualRoots = manual.filter((f) => !f.parentFolderId || f.parentFolderId === "");
   const courseData = await getCourseDataForSubject(subject).catch(() => null);
   const courseRoots = (courseData?.folders ?? []).map(courseFolderToFolder);
-
-  // De-dupe by normalized name so a manually-created "Chapter 1" and an
-  // auto-recognized "Chapter 1" don't render as two separate cards.
-  const seen = new Set(manualRoots.map((f) => f.name.trim().toLowerCase()));
-  const merged = [...manualRoots, ...courseRoots.filter((f) => !seen.has(f.name.trim().toLowerCase()))];
-  return merged.sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+  return courseRoots.sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
 }
 
 async function loadGeneralResources(subject: string): Promise<Resource[]> {
-  const [fSnap, lSnap] = await Promise.all([
-    getDocs(query(collection(db, "files"),    where("subject", "==", subject))).catch(() => null),
-    getDocs(query(collection(db, "lectures"), where("subject", "==", subject))).catch(() => null),
-  ]);
-  const files = (fSnap?.docs ?? []).map((d) => ({ kind: "file"    as const, id: d.id, ...d.data() } as Resource));
-  const lects = (lSnap?.docs ?? []).map((d) => ({ kind: "lecture" as const, id: d.id, ...d.data() } as Resource));
-  // Exclude premium lectures — they belong ONLY in the dedicated Premium Lectures section
-  const manual = [...files, ...lects].filter((r) =>
-    (!(r as any).folderId || (r as any).folderId === "") && !(r as any).isPremium
-  );
-
   const courseData = await getCourseDataForSubject(subject).catch(() => null);
   const courseGeneral = (courseData?.generalResources ?? [])
     .filter((r) => !r.isPremium)
     .map(courseResourceToResource);
-
-  const all = [...manual, ...courseGeneral];
-  all.sort((a, b) => ((a as any).order ?? 999) - ((b as any).order ?? 999));
-  return all;
+  courseGeneral.sort((a, b) => ((a as any).order ?? 999) - ((b as any).order ?? 999));
+  return courseGeneral;
 }
 
 async function loadFolderResources(subject: string, folderId: string): Promise<Resource[]> {
-  // Course-scanner chapter folders are synthetic (see courseEngine.ts) — skip the
-  // manual-collection query for those and read straight from the course engine.
-  if (folderId.startsWith("course_")) {
-    const courseData = await getCourseDataForSubject(subject).catch(() => null);
-    const list = (courseData?.resourcesByFolder[folderId] ?? []).map(courseResourceToResource);
-    return list.sort((a, b) => ((a as any).order ?? 999) - ((b as any).order ?? 999));
-  }
-
-  const [fSnap, lSnap] = await Promise.all([
-    getDocs(query(collection(db, "files"), where("subject", "==", subject), where("folderId", "==", folderId))).catch(() => null),
-    getDocs(query(collection(db, "lectures"), where("subject", "==", subject), where("folderId", "==", folderId))).catch(() => null),
-  ]);
-  const files  = (fSnap?.docs ?? []).map((d) => ({ kind: "file"    as const, id: d.id, ...d.data() } as Resource));
-  // Exclude premium lectures from folder view — they belong ONLY in the dedicated Premium Lectures section
-  const lects  = (lSnap?.docs ?? []).map((d) => ({ kind: "lecture" as const, id: d.id, ...d.data() } as Resource))
-    .filter((r) => !(r as any).isPremium);
-  const all    = [...files, ...lects];
-  all.sort((a, b) => ((a as any).order ?? 999) - ((b as any).order ?? 999));
-  return all;
+  const courseData = await getCourseDataForSubject(subject).catch(() => null);
+  const list = (courseData?.resourcesByFolder[folderId] ?? []).map(courseResourceToResource);
+  return list.sort((a, b) => ((a as any).order ?? 999) - ((b as any).order ?? 999));
 }
 
 /* ─── main page ──────────────────────────────────────────── */
@@ -903,7 +855,6 @@ export default function SubjectDetail() {
   const [resources,      setResources]      = useState<Resource[]>([]);
   const [generalRes,     setGeneralRes]     = useState<Resource[]>([]);
   const [premiumLects,   setPremiumLects]   = useState<LectureDoc[]>([]);
-  const [folderMap,      setFolderMap]      = useState<Record<string, { name: string; order: number }>>({});
   const [loading,        setLoading]        = useState(true);
   const [loadingContent, setLoadingContent] = useState(false);
   const [activeVideo,    setActiveVideo]    = useState<LectureDoc | null>(null);
@@ -920,24 +871,20 @@ export default function SubjectDetail() {
 
   const currentFolder = folderStack[folderStack.length - 1] ?? null;
 
+  // Folder names keyed by id — used to label premium lectures by chapter below.
+  // Derived straight from the course-engine folders, no separate Firestore read needed.
+  const folderNameById: Record<string, string> = {};
+  rootFolders.forEach((f) => { folderNameById[f.id] = f.name; });
+
   useEffect(() => {
     if (!subject) { setLoading(false); return; }
     setLoading(true);
     Promise.all([
       loadFolders(subject, null),
       loadGeneralResources(subject),
-      getDocs(query(collection(db, "lecture_folders"), where("subject", "==", subject))).catch(() => null),
-    ]).then(([folders, gen, allFoldersSnap]) => {
+    ]).then(([folders, gen]) => {
       setRootFolders(folders as Folder[]);
       setGeneralRes(gen as Resource[]);
-      if (allFoldersSnap) {
-        const map: Record<string, { name: string; order: number }> = {};
-        allFoldersSnap.docs.forEach((d) => {
-          const data = d.data() as { name?: string; order?: number };
-          map[d.id] = { name: data.name ?? d.id, order: data.order ?? 999 };
-        });
-        setFolderMap(map);
-      }
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [subject]);
@@ -947,26 +894,16 @@ export default function SubjectDetail() {
       setPremiumLects([]);
       return;
     }
-    const q = query(
-      collection(db, "lectures"),
-      where("subject", "==", subject),
-      where("isPremium", "==", true),
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      const manualLects = snap.docs
-        .map((d) => ({ id: d.id, ...d.data() } as LectureDoc));
-      // Merge in premium lectures auto-discovered from the course scanner —
-      // those live inside their chapter folders in courseEngine's output, so
-      // pull the lecture-type ones back out for this dedicated section too.
-      getCourseDataForSubject(subject).then((data) => {
-        const courseLects: LectureDoc[] = Object.values(data.resourcesByFolder)
-          .flat()
-          .filter((r): r is CourseResource & { kind: "lecture" } => r.kind === "lecture" && !!r.isPremium)
-          .map((r) => ({ id: r.id, title: r.title, hlsUrl: r.hlsUrl, folderId: r.folderId, subject: r.subject, category: r.category, order: r.order, isPremium: true }));
-        setPremiumLects([...manualLects, ...courseLects].sort((a, b) => (a.order ?? 999) - (b.order ?? 999)));
-      }).catch(() => setPremiumLects(manualLects.sort((a, b) => (a.order ?? 999) - (b.order ?? 999))));
-    }, () => setPremiumLects([]));
-    return unsub;
+    let cancelled = false;
+    getCourseDataForSubject(subject).then((data) => {
+      if (cancelled) return;
+      const courseLects: LectureDoc[] = Object.values(data.resourcesByFolder)
+        .flat()
+        .filter((r): r is CourseResource & { kind: "lecture" } => r.kind === "lecture" && !!r.isPremium)
+        .map((r) => ({ id: r.id, title: r.title, hlsUrl: r.hlsUrl, folderId: r.folderId, subject: r.subject, category: r.category, order: r.order, isPremium: true }));
+      setPremiumLects(courseLects.sort((a, b) => (a.order ?? 999) - (b.order ?? 999)));
+    }).catch(() => { if (!cancelled) setPremiumLects([]); });
+    return () => { cancelled = true; };
   }, [subject]);
 
   useEffect(() => {
@@ -983,7 +920,10 @@ export default function SubjectDetail() {
     }).catch(() => setLoadingContent(false));
   }, [subject, currentFolder]);
 
-  const openFolder = (f: Folder) => { setFolderStack((p) => [...p, f]); setFilter("all"); };
+  const openFolder = (f: Folder) => {
+    if (f.allPremium && !isPremium) { openPremiumModal(true); return; }
+    setFolderStack((p) => [...p, f]); setFilter("all");
+  };
   const goBack     = () => { setFolderStack((p) => p.slice(0, -1)); setActiveVideo(null); setFilter("all"); };
   const goToRoot   = () => { setFolderStack([]); setActiveVideo(null); setFilter("all"); };
   const goToIndex  = (i: number) => { setFolderStack((p) => p.slice(0, i + 1)); setActiveVideo(null); setFilter("all"); };
@@ -1083,9 +1023,14 @@ export default function SubjectDetail() {
         )}
 
         <SubjectErrorBoundary>
-          {/* ── Root view ── */}
-          {folderStack.length === 0 && (
-            <>
+          <AnimatePresence mode="wait">
+          {folderStack.length === 0 ? (
+            <motion.div key="root"
+              initial={{ opacity: 0, scale: 0.96, filter: "blur(6px)" }}
+              animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+              exit={{ opacity: 0, scale: 0.97, filter: "blur(4px)" }}
+              transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+            >
               {loading ? (
                 <div className="space-y-2.5">
                   {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
@@ -1098,17 +1043,29 @@ export default function SubjectDetail() {
                     <div className="mb-6">
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Folders</p>
                       <div className="space-y-2">
-                        {rootFolders.map((f, i) => (
-                          <button key={f.id} onClick={() => openFolder(f)}
-                            className="w-full bg-card border border-border rounded-xl px-4 py-3.5 flex items-center gap-3.5 shadow-sm card-hover text-left animate-fade-in-up group"
+                        {rootFolders.map((f, i) => {
+                          const locked = !!f.allPremium && !isPremium;
+                          return (
+                          <motion.button key={f.id} onClick={() => openFolder(f)}
+                            whileTap={{ scale: 0.97 }}
+                            className={`w-full bg-card border rounded-xl px-4 py-3.5 flex items-center gap-3.5 shadow-sm text-left animate-fade-in-up group ${
+                              locked ? "border-amber-500/25 opacity-90" : "border-border card-hover"
+                            }`}
                             style={{ animationDelay: `${i * 40}ms` }}>
-                            <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${meta.gradient} flex items-center justify-center flex-shrink-0`}>
+                            <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${meta.gradient} flex items-center justify-center flex-shrink-0 ${locked ? "opacity-60" : ""}`}>
                               <FolderOpen size={16} className="text-white" />
                             </div>
                             <p className="flex-1 font-semibold text-sm text-foreground">{f.name}</p>
-                            <ChevronRight size={15} className="text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all flex-shrink-0" />
-                          </button>
-                        ))}
+                            {locked ? (
+                              <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full bg-amber-500/15 text-amber-600 border border-amber-500/25 flex-shrink-0">
+                                <Lock size={10} /> Premium
+                              </span>
+                            ) : (
+                              <ChevronRight size={15} className="text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all flex-shrink-0" />
+                            )}
+                          </motion.button>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -1169,16 +1126,17 @@ export default function SubjectDetail() {
                             {premiumLects.length === 0 ? (
                               <p className="text-white/40 text-xs text-center py-3">Premium lectures will appear here once uploaded by admin.</p>
                             ) : (() => {
-                              // Group lectures by folder
-                              const folderIds = Object.keys(folderMap).sort((a, b) => (folderMap[a]?.order ?? 999) - (folderMap[b]?.order ?? 999));
+                              // Group lectures by chapter folder (names come straight from the
+                              // course-engine root folders already loaded for this subject).
+                              const folderIds = Object.keys(folderNameById);
                               const grouped: { folderId: string | null; name: string; lects: LectureDoc[] }[] = [];
                               // Build folder groups (only folders that have premium lectures)
                               folderIds.forEach((fid) => {
                                 const inFolder = premiumLects.filter((l) => l.folderId === fid);
-                                if (inFolder.length > 0) grouped.push({ folderId: fid, name: folderMap[fid].name, lects: inFolder });
+                                if (inFolder.length > 0) grouped.push({ folderId: fid, name: folderNameById[fid], lects: inFolder });
                               });
                               // Uncategorized — no folderId or folderId not in map
-                              const uncategorized = premiumLects.filter((l) => !l.folderId || !folderMap[l.folderId]);
+                              const uncategorized = premiumLects.filter((l) => !l.folderId || !folderNameById[l.folderId]);
                               const showFolders = grouped.length > 0;
 
                               const LectureRow = ({ lect }: { lect: LectureDoc }) => (
@@ -1298,12 +1256,14 @@ export default function SubjectDetail() {
                   )}
                 </>
               )}
-            </>
-          )}
-
-          {/* ── Inside a folder ── */}
-          {folderStack.length > 0 && (
-            <>
+            </motion.div>
+          ) : (
+            <motion.div key={currentFolder?.id ?? "folder"}
+              initial={{ opacity: 0, scale: 0.96, filter: "blur(6px)" }}
+              animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+              exit={{ opacity: 0, scale: 0.97, filter: "blur(4px)" }}
+              transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+            >
               <button onClick={goBack}
                 className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground mb-5 group">
                 <ChevronLeft size={15} className="group-hover:-translate-x-0.5 transition-transform" />
@@ -1379,8 +1339,9 @@ export default function SubjectDetail() {
                   )}
                 </>
               )}
-            </>
+            </motion.div>
           )}
+          </AnimatePresence>
         </SubjectErrorBoundary>
       </div>
 
