@@ -1,39 +1,38 @@
 import React, { useState } from 'react';
 import { Loader2 } from 'lucide-react';
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 
 /**
  * Login.tsx — Google sign-in screen with HyperOS-inspired motion:
  * slow morphing "liquid" ambient orbs, a spring pop-in for the card,
  * staggered content reveal, and elastic press feedback on the button.
  *
- * Wire up real auth by passing `onGoogleSignIn`, e.g. with Google
- * Identity Services (`google.accounts.id`) or Firebase Auth's
- * `signInWithPopup(auth, new GoogleAuthProvider())`.
+ * Auth is handled directly via Firebase's signInWithPopup. On success,
+ * the existing AuthContext/onAuthStateChanged flow takes over for user
+ * creation, role detection, and navigation.
  */
 
 interface LoginProps {
-  onGoogleSignIn?: () => Promise<void> | void;
   appName?: string;
   logoSrc?: string;
 }
 
 export default function Login({
-  onGoogleSignIn,
   appName = 'NextToppers-Feed',
   logoSrc = 'https://nexttopper-feed.pages.dev/logo.png',
 }: LoginProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSignIn = async () => {
-    if (loading) return;
-    setError(null);
+  const handleGoogleLogin = async () => {
     setLoading(true);
+    setError(null);
+
     try {
-      await onGoogleSignIn?.();
-    } catch (err) {
-      setError('Could not sign in. Try again.');
-    } finally {
+      await signInWithPopup(auth, new GoogleAuthProvider());
+    } catch {
+      setError('Sign in failed. Please try again.');
       setLoading(false);
     }
   };
@@ -288,7 +287,7 @@ export default function Login({
         <button
           type="button"
           className="hos-btn"
-          onClick={handleSignIn}
+          onClick={handleGoogleLogin}
           disabled={loading}
           aria-busy={loading}
         >
