@@ -14,11 +14,11 @@ import {
   FileText, Video, FolderOpen, ExternalLink, Play, X,
   BookOpen, Sigma, FlaskConical, Globe, Languages, Monitor, Brain,
   ChevronRight, ChevronLeft, Download, Eye, AlertTriangle, Lock, Crown,
-  Bookmark, BookmarkCheck, Minimize2, SkipBack, SkipForward, CheckCircle2
+  Bookmark, BookmarkCheck, Minimize2, SkipBack, SkipForward, CheckCircle2, Trash2
 } from "lucide-react";
 import Hls from "hls.js";
 import { motion, AnimatePresence } from "framer-motion";
-import { getCourseDataForSubject, type CourseFolder, type CourseResource } from "@/lib/courseEngine";
+import { getCourseDataForSubject, deleteCourseContent, type CourseFolder, type CourseResource } from "@/lib/courseEngine";
 
 /* ─── bookmark helpers (localStorage) ───────────────────────── */
 interface BMItem {
@@ -66,12 +66,12 @@ interface Folder {
 interface FileDoc {
   id: string; name: string; link: string; folderId?: string;
   subject: string; type?: string; thumbnail?: string; category?: string; order: number;
-  isPremium?: boolean;
+  isPremium?: boolean; courseId?: string; docId?: string;
 }
 interface LectureDoc {
   id: string; title: string; hlsUrl?: string; folderId?: string;
   subject: string; thumbnail?: string; category?: string; order: number;
-  isPremium?: boolean;
+  isPremium?: boolean; courseId?: string; docId?: string;
 }
 type Resource = ({ kind: "file" } & FileDoc) | ({ kind: "lecture" } & LectureDoc);
 
@@ -702,7 +702,7 @@ function BMButton({ id, bmItem }: { id: string; bmItem: Omit<BMItem, "savedAt"> 
 }
 
 /* ─── resource row ────────────────────────────────────────── */
-function ResourceRow({ r, onPlay, onPreview, isLoggedIn, isPremiumUser, onUpgrade, onGuestSignIn, subject }: {
+function ResourceRow({ r, onPlay, onPreview, isLoggedIn, isPremiumUser, onUpgrade, onGuestSignIn, subject, isAdmin, onDelete }: {
   r: Resource;
   onPlay: (l: LectureDoc) => void;
   onPreview: (url: string, title: string, id: string, contentType: "file" | "lecture", category?: string) => void;
@@ -711,8 +711,27 @@ function ResourceRow({ r, onPlay, onPreview, isLoggedIn, isPremiumUser, onUpgrad
   onUpgrade: () => void;
   onGuestSignIn: (action: string) => void;
   subject?: string;
+  isAdmin?: boolean;
+  onDelete?: (r: Resource) => void;
 }) {
   const locked = (r as any).isPremium && !isPremiumUser;
+  const canDelete = isAdmin && !!r.courseId && !!r.docId;
+
+  const DeleteButton = () => (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        const label = r.kind === "file" ? r.name : r.title;
+        if (window.confirm(`Delete "${label}"? This permanently removes it from Firestore and it will no longer show in this folder.`)) {
+          onDelete?.(r);
+        }
+      }}
+      className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 press-spring border border-destructive/25 text-destructive hover:bg-destructive/10 transition-colors"
+      title="Delete (admin only)"
+    >
+      <Trash2 size={12} />
+    </button>
+  );
 
   if (r.kind === "file") {
     return (
@@ -731,6 +750,7 @@ function ResourceRow({ r, onPlay, onPreview, isLoggedIn, isPremiumUser, onUpgrad
           </div>
         </div>
         <BMButton id={`file_${r.id}`} bmItem={{ id: `file_${r.id}`, type: "file", title: r.name, subject: subject ?? "", link: r.link, thumbnail: r.thumbnail }} />
+        {canDelete && <DeleteButton />}
         {locked ? (
           <PremiumLock onUpgrade={onUpgrade} />
         ) : isLoggedIn ? (
@@ -764,6 +784,7 @@ function ResourceRow({ r, onPlay, onPreview, isLoggedIn, isPremiumUser, onUpgrad
         </div>
       </div>
       <BMButton id={`lect_${r.id}`} bmItem={{ id: `lect_${r.id}`, type: "lecture", title: r.title, subject: subject ?? "", hlsUrl: r.hlsUrl, thumbnail: r.thumbnail }} />
+      {canDelete && <DeleteButton />}
       {locked ? (
         <PremiumLock onUpgrade={onUpgrade} />
       ) : isLoggedIn ? (
@@ -798,8 +819,8 @@ function courseFolderToFolder(f: CourseFolder): Folder {
 }
 function courseResourceToResource(r: CourseResource): Resource {
   return r.kind === "file"
-    ? { kind: "file", id: r.id, name: r.name, link: r.link, folderId: r.folderId, subject: r.subject, category: r.category, order: r.order, isPremium: r.isPremium }
-    : { kind: "lecture", id: r.id, title: r.title, hlsUrl: r.hlsUrl, folderId: r.folderId, subject: r.subject, category: r.category, order: r.order, isPremium: r.isPremium };
+    ? { kind: "file", id: r.id, name: r.name, link: r.link, folderId: r.folderId, subject: r.subject, category: r.category, order: r.order, isPremium: r.isPremium, courseId: r.courseId, docId: r.docId }
+    : { kind: "lecture", id: r.id, title: r.title, hlsUrl: r.hlsUrl, folderId: r.folderId, subject: r.subject, category: r.category, order: r.order, isPremium: r.isPremium, courseId: r.courseId, docId: r.docId };
 }
 
 /* ─── helpers to load data ─────────────────────────────────
@@ -837,7 +858,7 @@ async function loadFolderResources(subject: string, folderId: string): Promise<R
 export default function SubjectDetail() {
   const [, params] = useRoute("/subjects/:subject");
   const [, navigate] = useLocation();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { isPremium } = usePremium();
   const { setOpen: openPremiumModal } = usePremiumModal();
   const isLoggedIn = !!user;
@@ -868,6 +889,20 @@ export default function SubjectDetail() {
     setGuestModalAction(action);
     setGuestModalOpen(true);
   }, []);
+
+  /* Admin-only: permanently delete a file/lecture from Firestore (courses/{courseId}/content/{docId})
+     and remove it from whichever local list currently renders it, so it vanishes immediately. */
+  const handleDeleteResource = useCallback(async (r: Resource) => {
+    if (!isAdmin || !r.courseId || !r.docId) return;
+    try {
+      await deleteCourseContent(r.courseId, r.docId);
+      setResources((prev) => prev.filter((x) => x.id !== r.id));
+      setGeneralRes((prev) => prev.filter((x) => x.id !== r.id));
+      setPremiumLects((prev) => prev.filter((x) => x.id !== r.id));
+    } catch {
+      window.alert("Failed to delete — please try again.");
+    }
+  }, [isAdmin]);
 
   const currentFolder = folderStack[folderStack.length - 1] ?? null;
 
@@ -1082,6 +1117,8 @@ export default function SubjectDetail() {
                             onUpgrade={() => openPremiumModal(true)}
                             onGuestSignIn={handleGuestSignIn}
                             subject={subject}
+                            isAdmin={isAdmin}
+                            onDelete={handleDeleteResource}
                           />
                         ))}
                       </div>
@@ -1326,6 +1363,8 @@ export default function SubjectDetail() {
                                 onUpgrade={() => openPremiumModal(true)}
                                 onGuestSignIn={handleGuestSignIn}
                                 subject={subject}
+                                isAdmin={isAdmin}
+                                onDelete={handleDeleteResource}
                               />
                             </div>
                           </div>
