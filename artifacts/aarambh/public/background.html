@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#05050a">
+<title>Next Toppers — Premium Live Background</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#05050a}
+body{isolation:isolate}
+.scene{position:fixed;inset:0;overflow:hidden;background:
+ radial-gradient(circle at 50% 50%,#111322 0%,#080910 45%,#040408 100%)}
+.blob{position:absolute;width:55vmax;height:55vmax;border-radius:50%;
+ filter:blur(65px);mix-blend-mode:screen;will-change:transform;
+ opacity:.72}
+.b1{left:-22vmax;top:-28vmax;
+ background:radial-gradient(circle at 50% 50%,rgba(40,120,255,.72),rgba(35,70,220,.28) 45%,transparent 70%);
+ animation:one 12s cubic-bezier(.45,.05,.55,.95) infinite alternate}
+.b2{right:-25vmax;top:-5vmax;
+ background:radial-gradient(circle at 50% 50%,rgba(0,225,190,.58),rgba(0,145,180,.20) 45%,transparent 72%);
+ animation:two 15s cubic-bezier(.45,.05,.55,.95) infinite alternate}
+.b3{left:15vmax;bottom:-38vmax;
+ background:radial-gradient(circle at 50% 50%,rgba(155,65,255,.48),rgba(105,45,210,.16) 48%,transparent 72%);
+ animation:three 17s cubic-bezier(.45,.05,.55,.95) infinite alternate}
+.b4{right:12vmax;bottom:-34vmax;
+ background:radial-gradient(circle at 50% 50%,rgba(255,70,145,.28),rgba(180,45,110,.10) 48%,transparent 72%);
+ animation:four 19s cubic-bezier(.45,.05,.55,.95) infinite alternate}
+@keyframes one{
+0%{transform:translate3d(0,0,0) scale(1)}
+50%{transform:translate3d(12vmax,8vmax,0) scale(1.16)}
+100%{transform:translate3d(4vmax,16vmax,0) scale(1.04)}
+}
+@keyframes two{
+0%{transform:translate3d(0,0,0) scale(1)}
+50%{transform:translate3d(-11vmax,10vmax,0) scale(1.18)}
+100%{transform:translate3d(-4vmax,-7vmax,0) scale(1.06)}
+}
+@keyframes three{
+0%{transform:translate3d(0,0,0) scale(1)}
+50%{transform:translate3d(-10vmax,-9vmax,0) scale(1.2)}
+100%{transform:translate3d(12vmax,-3vmax,0) scale(1.05)}
+}
+@keyframes four{
+0%{transform:translate3d(0,0,0) scale(1)}
+50%{transform:translate3d(-8vmax,-12vmax,0) scale(1.18)}
+100%{transform:translate3d(5vmax,-6vmax,0) scale(1.05)}
+}
+.aurora{
+position:absolute;inset:-25%;
+background:
+radial-gradient(ellipse at 20% 30%,rgba(45,115,255,.10),transparent 28%),
+radial-gradient(ellipse at 78% 35%,rgba(0,225,190,.08),transparent 25%),
+radial-gradient(ellipse at 52% 78%,rgba(165,65,255,.09),transparent 30%);
+filter:blur(35px);
+animation:aurora 16s ease-in-out infinite alternate;
+will-change:transform,opacity
+}
+@keyframes aurora{
+0%{transform:translate3d(-2%,1%,0) scale(1);opacity:.75}
+50%{transform:translate3d(3%,-3%,0) scale(1.08);opacity:1}
+100%{transform:translate3d(-3%,4%,0) scale(1.03);opacity:.82}
+}
+.wave{
+position:absolute;left:-20%;width:140%;height:45%;
+top:28%;
+border-radius:50%;
+background:linear-gradient(100deg,transparent 15%,rgba(55,115,255,.045) 35%,rgba(0,225,190,.055) 50%,rgba(160,70,255,.045) 65%,transparent 85%);
+filter:blur(28px);
+transform:rotate(-9deg);
+animation:wave 11s ease-in-out infinite alternate;
+}
+@keyframes wave{
+0%{transform:translateX(-8%) rotate(-9deg) scaleY(.85)}
+100%{transform:translateX(8%) rotate(-5deg) scaleY(1.08)}
+}
+.shine{
+position:absolute;inset:-60%;
+background:linear-gradient(115deg,transparent 43%,rgba(255,255,255,.025) 49%,rgba(255,255,255,.008) 51%,transparent 57%);
+animation:shine 12s ease-in-out infinite alternate;
+}
+@keyframes shine{from{transform:translateX(-7%)}to{transform:translateX(7%)}}
+.grain{position:absolute;inset:0;opacity:.025;pointer-events:none;
+background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E")}
+.vignette{position:absolute;inset:0;pointer-events:none;
+background:radial-gradient(ellipse at center,transparent 38%,rgba(0,0,0,.38) 100%)}
+@media(prefers-reduced-motion:reduce){
+.blob,.aurora,.wave,.shine{animation:none}
+}
+</style>
+</head>
+<body>
+<div class="scene">
+  <div class="blob b1"></div>
+  <div class="blob b2"></div>
+  <div class="blob b3"></div>
+  <div class="blob b4"></div>
+  <div class="aurora"></div>
+  <div class="wave"></div>
+  <div class="shine"></div>
+  <div class="grain"></div>
+  <div class="vignette"></div>
+</div>
+</body>
+</html>
