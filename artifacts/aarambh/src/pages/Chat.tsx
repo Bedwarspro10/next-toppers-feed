@@ -560,7 +560,7 @@ function DateSeparator({ label }: { label: string }) {
 /* ─── System message ──────────────────────────────────────── */
 function SystemBubble({ text }: { text: string }) {
   return (
-    <div className="flex justify-center my-2 px-4">
+    <div className="flex justify-center my-2 px-4 animate-bubble-pop">
       <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] text-muted-foreground max-w-[85%] text-center"
         style={{ background: "rgba(99,102,241,0.07)", border: "1px solid rgba(99,102,241,0.12)" }}>
         <Sparkles size={10} className="text-indigo-400 flex-shrink-0" />
@@ -605,7 +605,7 @@ function MessageBubble({
 
   if (msg.deleted) {
     return (
-      <div className={`flex ${isMine ? "flex-row-reverse" : "flex-row"} gap-2 ${isGrouped ? "mb-0.5" : "mb-3"} px-4`}>
+      <div className={`flex ${isMine ? "flex-row-reverse" : "flex-row"} gap-2 ${isGrouped ? "mb-0.5" : "mb-3"} px-4 animate-bubble-pop`}>
         {!isMine && <div className="w-8 flex-shrink-0" />}
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-dashed text-xs italic text-muted-foreground/50 select-none"
           style={{ borderColor: "hsl(var(--border))" }}>
@@ -625,7 +625,7 @@ function MessageBubble({
 
   if (msg.type === "image" && msg.imageUrl) {
     return (
-      <div className={`flex ${isMine ? "flex-row-reverse" : "flex-row"} gap-2 items-end ${isGrouped ? "mb-0.5" : "mb-3"} px-4 animate-slide-up`}>
+      <div data-mine={isMine} className={`flex ${isMine ? "flex-row-reverse" : "flex-row"} gap-2 items-end ${isGrouped ? "mb-0.5" : "mb-3"} px-4 animate-bubble-pop`}>
         {!isMine && (
           isGrouped
             ? <div className="w-8 flex-shrink-0" />
@@ -639,7 +639,7 @@ function MessageBubble({
               {msg.senderIsPremium && <PremiumBadge />}
             </div>
           )}
-          <button className="rounded-2xl overflow-hidden border shadow-sm active:opacity-90"
+          <button className="rounded-2xl overflow-hidden border shadow-sm press-spring"
             style={{ borderColor: "hsl(var(--border))", borderRadius: bubbleRadius }}
             onClick={() => onImageClick?.(msg.imageUrl!, msg.imageCaption)}
             onTouchStart={startPress} onTouchEnd={cancelPress} onTouchMove={cancelPress}
@@ -665,7 +665,7 @@ function MessageBubble({
   }
 
   return (
-    <div className={`flex ${isMine ? "flex-row-reverse" : "flex-row"} gap-2 items-end ${isGrouped ? "mb-0.5" : "mb-3"} px-4 group animate-slide-up`}
+    <div data-mine={isMine} className={`flex ${isMine ? "flex-row-reverse" : "flex-row"} gap-2 items-end ${isGrouped ? "mb-0.5" : "mb-3"} px-4 group animate-bubble-pop`}
       onTouchStart={startPress} onTouchEnd={cancelPress} onTouchMove={cancelPress}
       onContextMenu={e => { e.preventDefault(); setShowActions(true); }}>
       {/* Avatar */}
@@ -941,7 +941,7 @@ function ChatComposer({ text, setText, onSend, sending, placeholder, replyTo, on
 
         {/* Send button */}
         <button onClick={onSend} disabled={!hasText || sending}
-          className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 mb-0.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-90"
+          className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 mb-0.5 press-spring disabled:opacity-40 disabled:cursor-not-allowed ${hasText ? "animate-tab-bounce" : ""}`}
           style={{
             background: hasText ? "linear-gradient(135deg,#6366f1,#4f46e5)" : "hsl(var(--secondary))",
             boxShadow: hasText ? "0 4px 14px rgba(99,102,241,0.45)" : "none",
@@ -958,7 +958,7 @@ function ChatComposer({ text, setText, onSend, sending, placeholder, replyTo, on
 function TypingIndicator({ users }: { users: string[] }) {
   if (!users.length) return null;
   return (
-    <div className="flex items-center gap-2 px-4 py-2 border-t flex-shrink-0"
+    <div className="flex items-center gap-2 px-4 py-2 border-t flex-shrink-0 animate-bubble-pop"
       style={{ background: "hsl(var(--card))", borderColor: "hsl(var(--border))" }}>
       <div className="flex gap-1 items-end">
         {[0, 1, 2].map(i => (
@@ -1544,7 +1544,7 @@ function PrivateChatPanel({ myUid, myName, myPhoto, myRole, other, isAdmin, onAv
 }
 
 /* ─── DM Sidebar Item ─────────────────────────────────────── */
-function DmListItem({ item, isActive, onClick }: { item: DmItem; isActive: boolean; onClick: () => void }) {
+function DmListItem({ item, isActive, onClick, index = 0 }: { item: DmItem; isActive: boolean; onClick: () => void; index?: number }) {
   const lastTime = item.lastMessageAt
     ? (() => {
         const d = new Date(item.lastMessageAt.seconds * 1000);
@@ -1556,8 +1556,11 @@ function DmListItem({ item, isActive, onClick }: { item: DmItem; isActive: boole
 
   return (
     <button onClick={onClick}
-      className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all ${isActive ? "bg-primary/10" : "hover:bg-secondary"}`}
-      style={{ border: isActive ? "1px solid rgba(99,102,241,0.2)" : "1px solid transparent" }}>
+      className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left press-spring animate-bubble-pop ${isActive ? "bg-primary/10" : "hover:bg-secondary"}`}
+      style={{
+        border: isActive ? "1px solid rgba(99,102,241,0.2)" : "1px solid transparent",
+        animationDelay: `${Math.min(index, 8) * 35}ms`,
+      }}>
       <Avatar name={item.user.name} photo={item.user.photoURL} uid={item.user.uid} size={10} isOnline={item.user.isOnline} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-1">
@@ -1768,7 +1771,7 @@ export default function Chat() {
             <div className="px-3 pt-3 pb-1">
               <p className="text-[10px] font-black text-muted-foreground/50 uppercase tracking-widest px-2 mb-2">Community</p>
               <button onClick={openCommunity}
-                className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all ${active.type === "community" ? "bg-primary/10" : "hover:bg-secondary"}`}
+                className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left press-spring animate-bubble-pop ${active.type === "community" ? "bg-primary/10" : "hover:bg-secondary"}`}
                 style={{ border: active.type === "community" ? "1px solid rgba(99,102,241,0.2)" : "1px solid transparent" }}>
                 <div className="relative flex-shrink-0">
                   <img src={GROUP_LOGO_URL} alt="Community" className="w-10 h-10 rounded-xl object-cover"
@@ -1800,8 +1803,8 @@ export default function Chat() {
                   </div>
                 ) : (
                   <div className="space-y-0.5">
-                    {dmItems.map(item => (
-                      <DmListItem key={item.user.uid} item={item}
+                    {dmItems.map((item, idx) => (
+                      <DmListItem key={item.user.uid} item={item} index={idx}
                         isActive={active.type === "private" && active.user.uid === item.user.uid}
                         onClick={() => openPrivate(item.user)} />
                     ))}
