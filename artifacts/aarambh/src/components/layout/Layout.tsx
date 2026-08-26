@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { motion } from "framer-motion";
 import { Link, useLocation } from "wouter";
 import {
   Home, BookOpen, Youtube, Bell, User as UserIcon,
@@ -160,13 +161,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
     const unread = isChat && totalChatUnread > 0 && !active ? totalChatUnread : 0;
     return (
       <Link href={item.href} onClick={onClick}>
-        <div className={`flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-150 relative ${
+        <div className={`flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer press-spring relative overflow-hidden ${
           active
-            ? "bg-sidebar-primary/20 text-sidebar-primary font-semibold"
+            ? "text-sidebar-primary font-semibold"
             : "text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground font-medium"
         }`}>
-          {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-sidebar-primary rounded-full" />}
-          <div className="relative flex-shrink-0">
+          {active && (
+            <motion.div
+              layoutId="hyper-sidebar-pill"
+              className="absolute inset-0 bg-sidebar-primary/20 rounded-xl"
+              transition={{ type: "spring", stiffness: 500, damping: 34, mass: 0.9 }}
+            />
+          )}
+          {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-sidebar-primary rounded-full z-10" />}
+          <div className={`relative z-10 flex-shrink-0 ${active ? "animate-tab-bounce" : ""}`}>
             <Icon size={17} />
             {unread > 0 && (
               <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center px-0.5">
@@ -174,7 +182,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               </span>
             )}
           </div>
-          <span className="text-sm">{item.label}</span>
+          <span className="relative z-10 text-sm">{item.label}</span>
         </div>
       </Link>
     );
@@ -580,8 +588,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
               : 0;
             return (
               <Link key={href} href={href}>
-                <div className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl cursor-pointer transition-all ${active ? "text-blue-500" : "text-muted-foreground"}`}>
-                  <div className="relative">
+                <div className="relative flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl cursor-pointer press-spring">
+                  {active && (
+                    <motion.div
+                      layoutId="hyper-bottom-nav-pill"
+                      className="absolute inset-0 rounded-xl bg-blue-500/10"
+                      transition={{ type: "spring", stiffness: 500, damping: 32, mass: 0.9 }}
+                    />
+                  )}
+                  <div className={`relative z-10 ${active ? "text-blue-500 animate-tab-bounce" : "text-muted-foreground"}`}>
                     <Icon size={19} strokeWidth={active ? 2.5 : 1.8} />
                     {unread > 0 && (
                       <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center px-0.5">
@@ -589,7 +604,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                       </span>
                     )}
                   </div>
-                  <span className={`text-[9px] font-semibold tracking-wide ${active ? "text-blue-500" : "text-muted-foreground/65"}`}>{label}</span>
+                  <span className={`relative z-10 text-[9px] font-semibold tracking-wide transition-colors ${active ? "text-blue-500" : "text-muted-foreground/65"}`}>{label}</span>
                 </div>
               </Link>
             );
