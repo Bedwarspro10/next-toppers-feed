@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { motion } from "framer-motion";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Link, useLocation } from "wouter";
 import {
   Home, BookOpen, Youtube, Bell, User as UserIcon,
@@ -67,6 +67,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { communityUnread, totalPrivateUnread } = useUnread();
   const { toggleOpen: toggleBot } = useBot();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const menuBtnRef = useRef<HTMLButtonElement>(null);
+  const [revealOrigin, setRevealOrigin] = useState({ x: 94, y: 6 });
+
+  const openMobileMenu = useCallback(() => {
+    const rect = menuBtnRef.current?.getBoundingClientRect();
+    if (rect) {
+      setRevealOrigin({
+        x: ((rect.left + rect.width / 2) / window.innerWidth) * 100,
+        y: ((rect.top + rect.height / 2) / window.innerHeight) * 100,
+      });
+    }
+    setMobileOpen(true);
+  }, []);
   const { dark, toggle: toggleDark } = useDarkMode();
   const [maintenance, setMaintenance] = useState<{ enabled: boolean; message: string } | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -367,8 +380,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </button>
             {/* Polished hamburger menu button */}
             <button
-              onClick={() => setMobileOpen(!mobileOpen)}
-              className="w-9 h-9 flex items-center justify-center rounded-xl text-foreground bg-secondary border border-border transition-all active:scale-90 hover:bg-secondary/80"
+              ref={menuBtnRef}
+              onClick={() => (mobileOpen ? setMobileOpen(false) : openMobileMenu())}
+              className="w-9 h-9 flex items-center justify-center rounded-xl text-foreground bg-secondary border border-border press-spring hover:bg-secondary/80"
               aria-label="Menu"
             >
               {mobileOpen ? (
@@ -384,30 +398,45 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        {/* ── Mobile Drawer (dark slide-in from right) ── */}
-        {mobileOpen && (
-          <>
-            {/* Backdrop */}
-            <div
+        {/* ── Mobile Drawer — HyperOS-style circular reveal from the tapped hamburger, liquid-glass panel ── */}
+        <AnimatePresence>
+          {mobileOpen && (
+            <motion.div
+              key="mobile-drawer"
               className="md:hidden fixed inset-0 z-40"
-              style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(2px)" }}
-              onClick={() => setMobileOpen(false)}
-            />
-            {/* Panel */}
-            <div
-              className="md:hidden fixed top-0 right-0 bottom-0 z-50 w-[76%] max-w-[320px] flex flex-col overflow-hidden"
-              style={{
-                background: "#0d1117",
-                borderLeft: "1px solid rgba(255,255,255,0.07)",
-                boxShadow: "-8px 0 32px rgba(0,0,0,0.6)",
-                animation: "slideInRight 0.22s ease",
-              }}
+              style={{ willChange: "clip-path" }}
+              initial={{ clipPath: `circle(0% at ${revealOrigin.x}% ${revealOrigin.y}%)` }}
+              animate={{ clipPath: `circle(150% at ${revealOrigin.x}% ${revealOrigin.y}%)` }}
+              exit={{ clipPath: `circle(0% at ${revealOrigin.x}% ${revealOrigin.y}%)` }}
+              transition={{ duration: 0.5, ease: [0.32, 0.72, 0, 1] }}
             >
+              {/* Backdrop */}
+              <motion.div
+                className="absolute inset-0"
+                style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(2px)" }}
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                transition={{ duration: 0.3 }}
+                onClick={() => setMobileOpen(false)}
+              />
+              {/* Liquid-glass panel */}
+              <div
+                className="absolute top-0 right-0 bottom-0 w-[76%] max-w-[320px] flex flex-col overflow-hidden"
+                style={{
+                  background: "linear-gradient(165deg, rgba(24,29,41,0.62), rgba(8,11,17,0.78))",
+                  backdropFilter: "blur(28px) saturate(190%)",
+                  WebkitBackdropFilter: "blur(28px) saturate(190%)",
+                  borderLeft: "1px solid rgba(255,255,255,0.16)",
+                  boxShadow: "-10px 0 44px rgba(0,0,0,0.55), inset 1px 0 0 rgba(255,255,255,0.08)",
+                }}
+              >
+                {/* Glass sheen highlight */}
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-24"
+                  style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0))" }} />
               {/* Top: Back to Home */}
               <div className="px-5 py-4 flex-shrink-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
                 <button
                   onClick={() => setMobileOpen(false)}
-                  className="flex items-center gap-2.5 font-bold text-sm"
+                  className="flex items-center gap-2.5 font-bold text-sm press-spring"
                   style={{ color: "#60a5fa" }}
                 >
                   <ArrowLeft size={16} />
@@ -544,9 +573,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   </Link>
                 )}
               </div>
-            </div>
-          </>
-        )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <main className="flex-1 min-w-0 pb-20 md:pb-0">{children}</main>
         <NextCutieFeedBot />
