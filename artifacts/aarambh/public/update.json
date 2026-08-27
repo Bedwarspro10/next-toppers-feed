@@ -1,9 +1,9 @@
 {
-  "versionName": "1.0",
-  "versionCode": 1,
+  "versionName": "1.2",
+  "versionCode": 2,
   "releaseNotes": [
     "Initial release"
   ],
-  "downloadUrl": "",
+  "downloadUrl": "https://github.com/bedwars80/Updates/releases/download/V1.2/NextToppersFeed_Export.apk",
   "mandatory": false
 }
