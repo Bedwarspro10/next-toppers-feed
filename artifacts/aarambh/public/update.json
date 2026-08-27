@@ -2,7 +2,24 @@
   "versionName": "1.2",
   "versionCode": 2,
   "releaseNotes": [
-    "Initial release"
+    "Introduced the new Next Toppers Feed experience",
+    "Added a redesigned Next Toppers Feed app logo",
+    "Added Software Update section for easier future updates",
+    "Added automatic update checking",
+    "Added update information and release notes display",
+    "Improved overall app stability and reliability",
+    "Fixed multiple UI and functionality bugs",
+    "Improved screen transitions throughout the app",
+    "Added smoother and more responsive animations",
+    "Improved loading states and feedback",
+    "Improved WebView performance and reliability",
+    "Improved handling of network and loading errors",
+    "Improved app responsiveness on different screen sizes",
+    "Improved overall navigation experience",
+    "Optimized background processing for better performance",
+    "Improved compatibility with newer Android versions",
+    "Various minor UI improvements and refinements",
+    "Various performance optimizations and stability improvements"
   ],
   "downloadUrl": "https://github.com/bedwars80/Updates/releases/download/V1.2/NextToppersFeed_Export.apk",
   "mandatory": false
