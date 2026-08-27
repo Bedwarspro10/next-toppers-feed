@@ -550,6 +550,114 @@
       display: block;
     }
 
+
+    /* =========================
+       FIRST-TIME INSTALL WARNING
+       ========================= */
+
+    .install-warning-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(0, 0, 0, .62);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .25s ease;
+    }
+
+    .install-warning-overlay.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .install-warning-card {
+      width: min(100%, 390px);
+      background: #fff;
+      color: #111;
+      border-radius: 28px;
+      padding: 26px 22px 20px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.30);
+      transform: translateY(16px) scale(.97);
+      transition: transform .3s cubic-bezier(.2,.8,.2,1);
+    }
+
+    .install-warning-overlay.show .install-warning-card {
+      transform: translateY(0) scale(1);
+    }
+
+    .install-warning-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+      background: #edf3ff;
+      color: #1769e8;
+    }
+
+    .install-warning-title {
+      font-size: 20px;
+      line-height: 1.2;
+      font-weight: 750;
+      margin-bottom: 10px;
+    }
+
+    .install-warning-text {
+      font-size: 14px;
+      line-height: 1.55;
+      color: #55565c;
+      user-select: text;
+    }
+
+    .install-warning-important {
+      margin-top: 14px;
+      padding: 13px 14px;
+      border-radius: 16px;
+      background: #f4f5f7;
+      color: #34353a;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .install-warning-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .install-warning-actions button {
+      flex: 1;
+      min-height: 46px;
+      border: 0;
+      border-radius: 23px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform .15s ease, background .2s ease;
+    }
+
+    .install-warning-cancel {
+      background: #e9eaee;
+      color: #17181b;
+    }
+
+    .install-warning-download {
+      background: #1769e8;
+      color: #fff;
+    }
+
+    .install-warning-actions button:active {
+      transform: scale(.97);
+    }
+
     @media (max-height: 650px) {
       .ui-title { font-size: 28px; }
       .primary-pill-btn { height: 48px; }
@@ -707,6 +815,51 @@
 </div>
 
 
+
+  <!-- Installation warning shown when the user explicitly taps Update -->
+  <div class="install-warning-overlay" id="installWarningOverlay"
+       role="dialog" aria-modal="true" aria-labelledby="installWarningTitle">
+    <div class="install-warning-card">
+      <div class="install-warning-icon" aria-hidden="true">
+        <svg width="25" height="25" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round"
+             stroke-linejoin="round">
+          <path d="M12 3 2.8 20h18.4L12 3Z"></path>
+          <path d="M12 9v4"></path>
+          <path d="M12 17h.01"></path>
+        </svg>
+      </div>
+
+      <div class="install-warning-title" id="installWarningTitle">
+        Before you download
+      </div>
+
+      <div class="install-warning-text">
+        To install a Next Toppers Feed update, Android may ask you to allow
+        <strong>Install unknown apps</strong> for Next Toppers Feed.
+        <br><br>
+        If you haven't allowed this permission before, you may need to
+        download the update again after enabling it.
+      </div>
+
+      <div class="install-warning-important">
+        <strong>Important:</strong> Next Toppers Feed will never install an APK
+        or any other app in the background. An APK is downloaded and
+        installation is started only after you come here and explicitly
+        choose to download an update.
+      </div>
+
+      <div class="install-warning-actions">
+        <button class="install-warning-cancel" id="installWarningCancel" type="button">
+          Cancel
+        </button>
+        <button class="install-warning-download" id="installWarningDownload" type="button">
+          Download update
+        </button>
+      </div>
+    </div>
+  </div>
+
 <script>
 /*
  * ============================================================
@@ -791,6 +944,31 @@
   const downloadButton = document.getElementById("downloadButton");
   const laterButton = document.getElementById("laterButton");
   const downloadStatus = document.getElementById("downloadStatus");
+  const installWarningOverlay =
+    document.getElementById("installWarningOverlay");
+  const installWarningCancel =
+    document.getElementById("installWarningCancel");
+  const installWarningDownload =
+    document.getElementById("installWarningDownload");
+
+  function closeInstallWarning() {
+    installWarningOverlay.classList.remove("show");
+  }
+
+  installWarningCancel.addEventListener("click", closeInstallWarning);
+
+  installWarningOverlay.addEventListener("click", event => {
+    if (event.target === installWarningOverlay) {
+      closeInstallWarning();
+    }
+  });
+
+  installWarningDownload.addEventListener("click", () => {
+    closeInstallWarning();
+    startDownloadUpdate();
+  });
+
+
 
 
   /* ----------------------------------------------------------
@@ -1181,7 +1359,7 @@
      DOWNLOAD UPDATE
      ---------------------------------------------------------- */
 
-  function downloadUpdate() {
+  function startDownloadUpdate() {
 
     if (!manifest || !manifest.downloadUrl) {
       downloadStatus.textContent =
@@ -1272,6 +1450,8 @@
      ---------------------------------------------------------- */
 
   function resetToHome() {
+
+    closeInstallWarning();
 
     checking = false;
 
@@ -1406,6 +1586,23 @@
      ----------------------------------------------------------
      Required because the HTML buttons use onclick="..."
      ---------------------------------------------------------- */
+
+  /*
+   * User-facing Update button:
+   * always shows the warning first.
+   * The actual download is only started after the user explicitly
+   * chooses "Download update" in that warning.
+   */
+  function downloadUpdate() {
+    if (!manifest || !manifest.downloadUrl) {
+      downloadStatus.textContent = "Update download is unavailable.";
+      downloadStatus.classList.add("show");
+      return;
+    }
+
+    installWarningOverlay.classList.add("show");
+    installWarningDownload.focus();
+  }
 
   window.runCheckSequence = runCheckSequence;
   window.downloadUpdate = downloadUpdate;
