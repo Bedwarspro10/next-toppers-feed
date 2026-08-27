@@ -91,33 +91,55 @@
         opacity .9s ease;
     }
 
+    .glow-backdrop.expanding {
+      width: 220vmax;
+      height: 220vmax;
+      filter: blur(90px);
+      opacity: .72;
+      background: conic-gradient(
+        from 0deg at 50% 50%,
+        #173d78,
+        #087f91,
+        #46338e,
+        #2458a0,
+        #0a7778,
+        #173d78
+      );
+      transition:
+        width 1.15s cubic-bezier(.16,1,.3,1),
+        height 1.15s cubic-bezier(.16,1,.3,1),
+        filter 1.15s ease,
+        opacity 1.15s ease,
+        background 1.15s ease;
+    }
+
     .glow-backdrop.scanning {
       width: 220vmax;
       height: 220vmax;
-      filter: blur(80px);
-      opacity: .85;
+      filter: blur(110px);
+      opacity: .76;
       background: conic-gradient(
         from 0deg at 50% 50%,
-        #0d47a1,
-        #00c853,
-        #6200ea,
-        #00b0ff,
-        #00e676,
-        #0d47a1
+        #173d78,
+        #087f91,
+        #46338e,
+        #2458a0,
+        #0a7778,
+        #173d78
       );
       animation:
-        fastSpin 1.4s linear infinite,
-        fluidPulse 2s ease-in-out infinite alternate;
+        fullScreenSpin 2.8s linear infinite,
+        fullScreenPulse 1.9s ease-in-out infinite alternate;
     }
 
-    @keyframes fastSpin {
-      from { transform: translate(-50%,-50%) rotate(0deg); }
-      to   { transform: translate(-50%,-50%) rotate(360deg); }
+    @keyframes fullScreenSpin {
+      from { transform: translate(-50%,-50%) rotate(0deg) scale(.98); }
+      to   { transform: translate(-50%,-50%) rotate(360deg) scale(1.04); }
     }
 
-    @keyframes fluidPulse {
-      from { transform: translate(-50%,-50%) scale(.9); }
-      to   { transform: translate(-50%,-50%) scale(1.1); }
+    @keyframes fullScreenPulse {
+      from { opacity: .60; filter: blur(105px); }
+      to   { opacity: .82; filter: blur(125px); }
     }
 
     .center-content {
@@ -457,6 +479,19 @@
       text-decoration: underline;
       cursor: pointer;
       margin-top: 6px;
+      min-height: 20px;
+    }
+
+    .card-description.collapsed {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 3;
+      overflow: hidden;
+    }
+
+    .card-description.expanded {
+      display: block;
+      overflow: visible;
     }
 
     .update-actions {
@@ -599,7 +634,7 @@
       </div>
 
       <div class="update-header">
-        <div class="sub-head">Update your phone</div>
+        <div class="sub-head">Software update</div>
         <div class="main-version" id="mainVersion">Next UI 8.5</div>
 
         <p class="warning-text">
@@ -716,7 +751,7 @@
      CONFIG
      ---------------------------------------------------------- */
 
-  const MANIFEST_URL = "/update.json";
+  const MANIFEST_URL = new URL("/update.json", window.location.href).href;
 
   // Your current app version.
   // Android should provide the real value through the bridge.
@@ -848,24 +883,24 @@
       throw new Error("Update version code is invalid.");
     }
 
-    if (!downloadUrl) {
-      throw new Error("Update download link is missing.");
-    }
+    // A manifest representing the currently installed build does not need
+    // a download URL. A URL is required only if a newer build is available.
+    if (downloadUrl) {
+      let url;
 
-    let url;
+      try {
+        url = new URL(downloadUrl);
+      } catch (e) {
+        throw new Error("Update download link is invalid.");
+      }
 
-    try {
-      url = new URL(downloadUrl);
-    } catch (e) {
-      throw new Error("Update download link is invalid.");
-    }
+      if (url.protocol !== "https:") {
+        throw new Error("Update download must use HTTPS.");
+      }
 
-    if (url.protocol !== "https:") {
-      throw new Error("Update download must use HTTPS.");
-    }
-
-    if (url.hostname.toLowerCase() !== ALLOWED_DOWNLOAD_HOST) {
-      throw new Error("Update download host is not allowed.");
+      if (url.hostname.toLowerCase() !== ALLOWED_DOWNLOAD_HOST) {
+        throw new Error("Update download host is not allowed.");
+      }
     }
 
     return {
@@ -963,21 +998,43 @@
     cardVersionTitle.textContent = displayVersion;
 
     if (data.releaseNotes.length > 0) {
-      cardDescription.textContent =
-        data.releaseNotes.join("\n");
+      cardDescription.textContent = data.releaseNotes.join("\n");
+      cardDescription.classList.add("collapsed");
+      cardDescription.classList.remove("expanded");
+      allChanges.style.display = "block";
+      allChanges.textContent = "Show more";
+      allChanges.setAttribute("aria-expanded", "false");
     } else {
       cardDescription.textContent =
         "This update includes new features, improvements, fixes and enhanced stability.";
+      cardDescription.classList.remove("collapsed", "expanded");
+      allChanges.style.display = "none";
     }
-
-    allChanges.textContent =
-      data.releaseNotes.length > 0
-        ? "All changes"
-        : "What's new";
 
     laterButton.style.display =
       data.mandatory ? "none" : "block";
   }
+
+
+  /* ----------------------------------------------------------
+     SHOW MORE / SHOW LESS
+     ---------------------------------------------------------- */
+
+  allChanges.addEventListener("click", () => {
+    const expanded = cardDescription.classList.contains("expanded");
+
+    if (expanded) {
+      cardDescription.classList.remove("expanded");
+      cardDescription.classList.add("collapsed");
+      allChanges.textContent = "Show more";
+      allChanges.setAttribute("aria-expanded", "false");
+    } else {
+      cardDescription.classList.remove("collapsed");
+      cardDescription.classList.add("expanded");
+      allChanges.textContent = "Show less";
+      allChanges.setAttribute("aria-expanded", "true");
+    }
+  });
 
 
   /* ----------------------------------------------------------
@@ -993,7 +1050,17 @@
     setCheckingButton(true);
     setSubtitle("", false);
 
-    glow.classList.add("scanning");
+    glow.classList.remove("scanning", "expanding");
+    requestAnimationFrame(() => {
+      glow.classList.add("expanding");
+
+      setTimeout(() => {
+        if (checking) {
+          glow.classList.remove("expanding");
+          glow.classList.add("scanning");
+        }
+      }, 1050);
+    });
 
     /*
      * Stage 1:
@@ -1058,7 +1125,7 @@
 
         applyManifest(latest);
 
-        glow.classList.remove("scanning");
+        glow.classList.remove("scanning", "expanding");
         clearLoader();
         setCheckingButton(false);
 
@@ -1075,7 +1142,7 @@
          */
         checking = false;
 
-        glow.classList.remove("scanning");
+        glow.classList.remove("scanning", "expanding");
         clearLoader();
         setCheckingButton(false);
 
@@ -1098,7 +1165,7 @@
        */
       checking = false;
 
-      glow.classList.remove("scanning");
+      glow.classList.remove("scanning", "expanding");
       clearLoader();
       setCheckingButton(false);
 
@@ -1210,7 +1277,7 @@
 
     clearLoader();
 
-    glow.classList.remove("scanning");
+    glow.classList.remove("scanning", "expanding");
 
     setCheckingButton(false);
 
@@ -1226,6 +1293,11 @@
 
     downloadStatus.textContent = "";
     downloadStatus.classList.remove("show");
+
+    cardDescription.classList.remove("expanded");
+    cardDescription.classList.add("collapsed");
+    allChanges.textContent = "Show more";
+    allChanges.setAttribute("aria-expanded", "false");
   }
 
 
