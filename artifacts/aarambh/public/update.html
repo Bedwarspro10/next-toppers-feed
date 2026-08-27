@@ -1,0 +1,1365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <title>Next UI 8.5 - Software Update</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      min-height: 100%;
+      background: #000;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Samsung Sans",
+                   "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    button { font: inherit; }
+
+    .screen-wrapper {
+      width: 100%;
+      height: 100dvh;
+      min-height: 100vh;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* =========================
+       CHECK / LATEST SCREEN
+       ========================= */
+
+    .view-checking {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: center;
+      padding:
+        0
+        max(24px, env(safe-area-inset-right))
+        max(32px, env(safe-area-inset-bottom) + 16px)
+        max(24px, env(safe-area-inset-left));
+      z-index: 2;
+      transition:
+        opacity .55s cubic-bezier(.22,1,.36,1),
+        transform .55s cubic-bezier(.22,1,.36,1);
+    }
+
+    .view-checking.hidden {
+      opacity: 0;
+      pointer-events: none;
+      transform: scale(.96);
+    }
+
+    .glow-backdrop {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 320px;
+      height: 320px;
+      border-radius: 50%;
+      background: radial-gradient(
+        circle,
+        rgba(30,185,95,.45) 0%,
+        rgba(26,115,232,.45) 45%,
+        rgba(142,36,170,.30) 70%,
+        transparent 80%
+      );
+      filter: blur(45px);
+      z-index: 1;
+      pointer-events: none;
+      transition:
+        width .9s cubic-bezier(.22,1,.36,1),
+        height .9s cubic-bezier(.22,1,.36,1),
+        filter .9s ease,
+        opacity .9s ease;
+    }
+
+    .glow-backdrop.scanning {
+      width: 220vmax;
+      height: 220vmax;
+      filter: blur(80px);
+      opacity: .85;
+      background: conic-gradient(
+        from 0deg at 50% 50%,
+        #0d47a1,
+        #00c853,
+        #6200ea,
+        #00b0ff,
+        #00e676,
+        #0d47a1
+      );
+      animation:
+        fastSpin 1.4s linear infinite,
+        fluidPulse 2s ease-in-out infinite alternate;
+    }
+
+    @keyframes fastSpin {
+      from { transform: translate(-50%,-50%) rotate(0deg); }
+      to   { transform: translate(-50%,-50%) rotate(360deg); }
+    }
+
+    @keyframes fluidPulse {
+      from { transform: translate(-50%,-50%) scale(.9); }
+      to   { transform: translate(-50%,-50%) scale(1.1); }
+    }
+
+    .center-content {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%,-50%);
+      width: 100%;
+      padding: 0 24px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 2;
+      color: #fff;
+    }
+
+    .ui-title {
+      font-size: clamp(28px, 8vw, 34px);
+      line-height: 1.1;
+      font-weight: 600;
+      letter-spacing: -.5px;
+      margin-bottom: 9px;
+    }
+
+    .status-subtitle {
+      font-size: 15px;
+      color: #9e9e9e;
+      font-weight: 400;
+      opacity: 0;
+      transform: translateY(7px);
+      transition:
+        opacity .5s ease,
+        transform .5s cubic-bezier(.22,1,.36,1);
+    }
+
+    .status-subtitle.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .bottom-section {
+      width: 100%;
+      max-width: 420px;
+      z-index: 2;
+    }
+
+    .primary-pill-btn {
+      width: 100%;
+      height: 52px;
+      border: 0;
+      border-radius: 28px;
+      background: #1b6bf2;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 8px 25px rgba(27,107,242,.18);
+      transition:
+        background .2s ease,
+        transform .15s ease,
+        box-shadow .2s ease;
+    }
+
+    .primary-pill-btn:active {
+      transform: scale(.975);
+      background: #1557c0;
+    }
+
+    .primary-pill-btn:disabled {
+      cursor: default;
+    }
+
+    .btn-text {
+      transition: opacity .2s ease;
+    }
+
+    .loader-stage {
+      display: none;
+      position: absolute;
+      width: 32px;
+      height: 32px;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%,-50%);
+    }
+
+    .stage-1 .dot {
+      width: 8px;
+      height: 8px;
+      background: #fff;
+      border-radius: 50%;
+      position: absolute;
+      top: 3px;
+      left: 12px;
+      transform-origin: 4px 13px;
+      animation: spinDot .8s linear infinite;
+    }
+
+    .stage-2 {
+      animation: orbit .9s linear infinite;
+    }
+
+    .stage-2 .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      position: absolute;
+    }
+
+    .stage-2 .d1 { top: 2px; left: 12.5px; background:#60a5fa; }
+    .stage-2 .d2 { top: 12.5px; right: 2px; background:#34d399; }
+    .stage-2 .d3 { bottom: 2px; left: 12.5px; background:#fbbf24; }
+    .stage-2 .d4 { top: 12.5px; left: 2px; background:#f87171; }
+
+    .stage-3 .dot {
+      width: 12px;
+      height: 12px;
+      background: #a78bfa;
+      border-radius: 50%;
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      animation: pulse .5s ease-in-out infinite alternate;
+    }
+
+    @keyframes spinDot {
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes orbit {
+      to { transform: translate(-50%,-50%) rotate(360deg); }
+    }
+
+    @keyframes pulse {
+      from { transform: scale(.65); opacity:.6; }
+      to   { transform: scale(1.25); opacity:1; }
+    }
+
+    /* =========================
+       UPDATE AVAILABLE SCREEN
+       ========================= */
+
+    .view-update-available {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      background: #f7f7f9;
+      color: #1a1a1a;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(30px);
+      transition:
+        opacity .55s cubic-bezier(.22,1,.36,1),
+        transform .55s cubic-bezier(.22,1,.36,1);
+      z-index: 3;
+      padding:
+        max(18px, env(safe-area-inset-top))
+        max(20px, env(safe-area-inset-right))
+        max(20px, env(safe-area-inset-bottom))
+        max(20px, env(safe-area-inset-left));
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .view-update-available.active {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0);
+    }
+
+    .update-nav-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-size: 20px;
+      font-weight: 700;
+      color: #111;
+      padding: 6px 0 18px;
+    }
+
+    .back-btn {
+      width: 36px;
+      height: 36px;
+      border: 0;
+      border-radius: 50%;
+      background: transparent;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .back-btn:active {
+      background: rgba(0,0,0,.08);
+      transform: scale(.94);
+    }
+
+    .update-header {
+      margin-bottom: 18px;
+    }
+
+    .sub-head {
+      font-size: 15px;
+      font-weight: 600;
+      color: #222;
+      margin-bottom: 3px;
+    }
+
+    .main-version {
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: -.6px;
+      color: #000;
+      margin-bottom: 8px;
+    }
+
+    .warning-text {
+      font-size: 13px;
+      color: #8c8c93;
+      line-height: 1.45;
+    }
+
+    .update-card {
+      background: #fff;
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 0 4px 20px rgba(0,0,0,.045);
+      margin-bottom: 24px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card-banner {
+      width: 100%;
+      height: 130px;
+      background: linear-gradient(135deg,#4388e8 0%,#30b8b2 50%,#4dd0a0 100%);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding-right: 20px;
+      overflow: hidden;
+    }
+
+    .card-banner::before,
+    .card-banner::after {
+      content: "";
+      position: absolute;
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    .card-banner::before {
+      width: 150px;
+      height: 150px;
+      left: -35px;
+      top: -50px;
+      background: rgba(255,255,255,.12);
+    }
+
+    .card-banner::after {
+      width: 120px;
+      height: 120px;
+      right: 65px;
+      bottom: -75px;
+      background: rgba(255,255,255,.12);
+    }
+
+    .banner-graphic-elements {
+      position: absolute;
+      left: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .banner-pill {
+      height: 16px;
+      border-radius: 8px;
+      background: rgba(255,255,255,.45);
+    }
+
+    .pill-1 { width:90px; }
+    .pill-2 { width:60px; }
+
+    .banner-timer-widget {
+      background: rgba(0,0,0,.22);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      padding: 10px 18px;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #fff;
+      font-weight: 700;
+      font-size: 19px;
+      letter-spacing: .5px;
+      z-index: 1;
+    }
+
+    .card-body {
+      padding: 18px 20px 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .card-version-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #111;
+    }
+
+    .card-description {
+      font-size: 13px;
+      color: #4a4a4e;
+      line-height: 1.5;
+      white-space: pre-line;
+    }
+
+    .all-changes-link {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #111;
+      text-decoration: underline;
+      cursor: pointer;
+      margin-top: 6px;
+    }
+
+    .update-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding-bottom: 2px;
+    }
+
+    .btn-later,
+    .btn-update {
+      width: 100%;
+      height: 48px;
+      border: 0;
+      border-radius: 24px;
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: 600;
+      transition: transform .15s ease, background .2s ease;
+    }
+
+    .btn-later {
+      background: #e5e6ea;
+      color: #111;
+    }
+
+    .btn-update {
+      background: #1b6bf2;
+      color: #fff;
+      box-shadow: 0 7px 20px rgba(27,107,242,.16);
+    }
+
+    .btn-later:active,
+    .btn-update:active {
+      transform: scale(.975);
+    }
+
+    .btn-later:active { background:#d8d9de; }
+    .btn-update:active { background:#1557c0; }
+
+    .btn-update:disabled {
+      opacity: .72;
+      cursor: default;
+      transform: none;
+    }
+
+    .download-status {
+      display: none;
+      text-align: center;
+      font-size: 13px;
+      color: #707078;
+      margin-top: -2px;
+    }
+
+    .download-status.show {
+      display: block;
+    }
+
+    @media (max-height: 650px) {
+      .ui-title { font-size: 28px; }
+      .primary-pill-btn { height: 48px; }
+      .card-banner { height: 105px; }
+      .update-card { margin-bottom: 12px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: .001ms !important;
+        transition-duration: .001ms !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="screen-wrapper">
+
+  <!-- =========================
+       VIEW 1
+       ========================= -->
+  <div class="view-checking" id="viewChecking">
+
+    <div class="glow-backdrop" id="glowBackdrop"></div>
+
+    <div class="center-content">
+      <h1 class="ui-title">Next UI 8.5</h1>
+      <p class="status-subtitle" id="statusSubtitle"></p>
+    </div>
+
+    <div class="bottom-section">
+      <button
+        class="primary-pill-btn"
+        id="updateBtn"
+        type="button"
+        onclick="runCheckSequence()"
+      >
+        <span class="btn-text" id="btnText">Check for updates</span>
+
+        <div class="loader-stage stage-1" id="stage1">
+          <div class="dot"></div>
+        </div>
+
+        <div class="loader-stage stage-2" id="stage2">
+          <div class="dot d1"></div>
+          <div class="dot d2"></div>
+          <div class="dot d3"></div>
+          <div class="dot d4"></div>
+        </div>
+
+        <div class="loader-stage stage-3" id="stage3">
+          <div class="dot"></div>
+        </div>
+      </button>
+    </div>
+  </div>
+
+
+  <!-- =========================
+       VIEW 2
+       ========================= -->
+  <div class="view-update-available" id="viewUpdateAvailable">
+
+    <div>
+      <div class="update-nav-header">
+        <button
+          class="back-btn"
+          type="button"
+          onclick="resetToHome()"
+          aria-label="Back"
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24"
+               fill="none" stroke="#111" stroke-width="2.6"
+               stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </button>
+
+        <span>Software update</span>
+      </div>
+
+      <div class="update-header">
+        <div class="sub-head">Update your phone</div>
+        <div class="main-version" id="mainVersion">Next UI 8.5</div>
+
+        <p class="warning-text">
+          Using mobile data to download may result in additional charges.
+          Using Wi-Fi is recommended.
+        </p>
+      </div>
+
+      <div class="update-card">
+
+        <div class="card-banner" id="cardBanner">
+          <div class="banner-graphic-elements">
+            <div class="banner-pill pill-1"></div>
+            <div class="banner-pill pill-2"></div>
+          </div>
+
+          <div class="banner-timer-widget">
+            <svg width="18" height="18" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2.5"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 22h14"></path>
+              <path d="M5 2h14"></path>
+              <path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"></path>
+              <path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"></path>
+            </svg>
+            <span id="releaseTimer">25:00</span>
+          </div>
+        </div>
+
+        <div class="card-body">
+          <div class="card-version-title" id="cardVersionTitle">
+            Next UI 8.5
+          </div>
+
+          <p class="card-description" id="cardDescription">
+            This update includes new features, improvements, fixes and enhanced stability.
+          </p>
+
+          <div class="all-changes-link" id="allChanges">
+            All changes
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="update-actions">
+
+      <button
+        class="btn-later"
+        id="laterButton"
+        type="button"
+        onclick="resetToHome()"
+      >
+        Later
+      </button>
+
+      <button
+        class="btn-update"
+        id="downloadButton"
+        type="button"
+        onclick="downloadUpdate()"
+      >
+        Update
+      </button>
+
+      <div class="download-status" id="downloadStatus"></div>
+    </div>
+
+  </div>
+</div>
+
+
+<script>
+/*
+ * ============================================================
+ * NEXT UI 8.5 SOFTWARE UPDATE
+ * SINGLE-FILE VERSION
+ * ============================================================
+ *
+ * Website manifest:
+ *
+ * /update.json
+ *
+ * Example:
+ *
+ * {
+ *   "versionName": "1.1",
+ *   "versionCode": 2,
+ *   "releaseNotes": [
+ *     "Fixed login issues",
+ *     "Improved stability",
+ *     "Improved performance"
+ *   ],
+ *   "downloadUrl": "https://github.com/Bedwarspro10/Nextttoppers-Feed-App-V3/releases/download/v1.1/app-release.apk",
+ *   "mandatory": false
+ * }
+ *
+ * Android WebView bridge expected:
+ *
+ * AndroidUpdate.getAppVersion()
+ * AndroidUpdate.getAppVersionCode()
+ * AndroidUpdate.downloadUpdate(url)
+ * AndroidUpdate.goBack()
+ *
+ * The website NEVER receives or trusts a UID.
+ * The Android application remains responsible for the
+ * authenticated/native side.
+ */
+
+(() => {
+  "use strict";
+
+  /* ----------------------------------------------------------
+     CONFIG
+     ---------------------------------------------------------- */
+
+  const MANIFEST_URL = "/update.json";
+
+  // Your current app version.
+  // Android should provide the real value through the bridge.
+  const FALLBACK_VERSION_NAME = "1.0";
+  const FALLBACK_VERSION_CODE = 1;
+
+  /*
+   * Only allow GitHub release downloads.
+   * Change this hostname only if you intentionally move
+   * your APK hosting somewhere else.
+   */
+  const ALLOWED_DOWNLOAD_HOST = "github.com";
+
+
+  /* ----------------------------------------------------------
+     ELEMENTS
+     ---------------------------------------------------------- */
+
+  const viewChecking = document.getElementById("viewChecking");
+  const viewUpdate = document.getElementById("viewUpdateAvailable");
+
+  const updateBtn = document.getElementById("updateBtn");
+  const btnText = document.getElementById("btnText");
+
+  const stage1 = document.getElementById("stage1");
+  const stage2 = document.getElementById("stage2");
+  const stage3 = document.getElementById("stage3");
+
+  const subtitle = document.getElementById("statusSubtitle");
+  const glow = document.getElementById("glowBackdrop");
+
+  const mainVersion = document.getElementById("mainVersion");
+  const cardVersionTitle = document.getElementById("cardVersionTitle");
+  const cardDescription = document.getElementById("cardDescription");
+  const allChanges = document.getElementById("allChanges");
+
+  const downloadButton = document.getElementById("downloadButton");
+  const laterButton = document.getElementById("laterButton");
+  const downloadStatus = document.getElementById("downloadStatus");
+
+
+  /* ----------------------------------------------------------
+     STATE
+     ---------------------------------------------------------- */
+
+  let checking = false;
+  let manifest = null;
+
+  let appInfo = {
+    versionName: FALLBACK_VERSION_NAME,
+    versionCode: FALLBACK_VERSION_CODE
+  };
+
+
+  /* ----------------------------------------------------------
+     ANDROID BRIDGE
+     ---------------------------------------------------------- */
+
+  function getAndroidBridge() {
+    return window.AndroidUpdate || null;
+  }
+
+  function getAndroidVersion() {
+    return new Promise(resolve => {
+
+      const bridge = getAndroidBridge();
+
+      /*
+       * Preferred method:
+       * Android directly returns version information.
+       */
+      if (
+        bridge &&
+        typeof bridge.getAppVersion === "function" &&
+        typeof bridge.getAppVersionCode === "function"
+      ) {
+        try {
+          const name = bridge.getAppVersion();
+          const code = Number(bridge.getAppVersionCode());
+
+          if (
+            name !== null &&
+            name !== undefined &&
+            Number.isFinite(code) &&
+            code > 0
+          ) {
+            resolve({
+              versionName: String(name),
+              versionCode: Math.floor(code)
+            });
+            return;
+          }
+        } catch (e) {
+          console.warn("Could not read Android version.");
+        }
+      }
+
+      /*
+       * Safe browser fallback.
+       * This is useful when opening the page normally in Chrome.
+       */
+      resolve({
+        versionName: FALLBACK_VERSION_NAME,
+        versionCode: FALLBACK_VERSION_CODE
+      });
+    });
+  }
+
+
+  /* ----------------------------------------------------------
+     VERSION MANIFEST
+     ---------------------------------------------------------- */
+
+  function validateManifest(data) {
+
+    if (!data || typeof data !== "object") {
+      throw new Error("Invalid update information.");
+    }
+
+    const versionName = String(data.versionName || "").trim();
+    const versionCode = Number(data.versionCode);
+    const downloadUrl = String(data.downloadUrl || "").trim();
+
+    if (!versionName) {
+      throw new Error("Update version is missing.");
+    }
+
+    if (!Number.isFinite(versionCode) || versionCode <= 0) {
+      throw new Error("Update version code is invalid.");
+    }
+
+    if (!downloadUrl) {
+      throw new Error("Update download link is missing.");
+    }
+
+    let url;
+
+    try {
+      url = new URL(downloadUrl);
+    } catch (e) {
+      throw new Error("Update download link is invalid.");
+    }
+
+    if (url.protocol !== "https:") {
+      throw new Error("Update download must use HTTPS.");
+    }
+
+    if (url.hostname.toLowerCase() !== ALLOWED_DOWNLOAD_HOST) {
+      throw new Error("Update download host is not allowed.");
+    }
+
+    return {
+      versionName,
+      versionCode: Math.floor(versionCode),
+      downloadUrl,
+      mandatory: data.mandatory === true,
+      releaseNotes: Array.isArray(data.releaseNotes)
+        ? data.releaseNotes.map(item => String(item))
+        : []
+    };
+  }
+
+
+  async function fetchManifest() {
+
+    const response = await fetch(
+      MANIFEST_URL + "?t=" + Date.now(),
+      {
+        method: "GET",
+        cache: "no-store",
+        headers: {
+          "Accept": "application/json"
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Update server returned " + response.status);
+    }
+
+    const data = await response.json();
+
+    return validateManifest(data);
+  }
+
+
+  /* ----------------------------------------------------------
+     UI HELPERS
+     ---------------------------------------------------------- */
+
+  function clearLoader() {
+    stage1.style.display = "none";
+    stage2.style.display = "none";
+    stage3.style.display = "none";
+  }
+
+  function showLoader(stage) {
+    clearLoader();
+
+    if (stage === 1) stage1.style.display = "block";
+    if (stage === 2) stage2.style.display = "block";
+    if (stage === 3) stage3.style.display = "block";
+  }
+
+  function setSubtitle(text, show) {
+
+    subtitle.textContent = text || "";
+
+    subtitle.classList.remove("show");
+
+    if (show && text) {
+      requestAnimationFrame(() => {
+        subtitle.classList.add("show");
+      });
+    }
+  }
+
+  function setCheckingButton(loading) {
+
+    updateBtn.disabled = loading;
+
+    if (loading) {
+      btnText.style.opacity = "0";
+      updateBtn.style.pointerEvents = "none";
+    } else {
+      btnText.style.opacity = "1";
+      updateBtn.style.pointerEvents = "auto";
+    }
+  }
+
+
+  /* ----------------------------------------------------------
+     APPLY UPDATE INFORMATION TO EXISTING UI
+     ---------------------------------------------------------- */
+
+  function applyManifest(data) {
+
+    manifest = data;
+
+    const displayVersion =
+      "Next UI " + data.versionName.replace(/^Next UI\s*/i, "");
+
+    mainVersion.textContent = displayVersion;
+    cardVersionTitle.textContent = displayVersion;
+
+    if (data.releaseNotes.length > 0) {
+      cardDescription.textContent =
+        data.releaseNotes.join("\n");
+    } else {
+      cardDescription.textContent =
+        "This update includes new features, improvements, fixes and enhanced stability.";
+    }
+
+    allChanges.textContent =
+      data.releaseNotes.length > 0
+        ? "All changes"
+        : "What's new";
+
+    laterButton.style.display =
+      data.mandatory ? "none" : "block";
+  }
+
+
+  /* ----------------------------------------------------------
+     CHECK UPDATE
+     ---------------------------------------------------------- */
+
+  async function runCheckSequence() {
+
+    if (checking) return;
+
+    checking = true;
+
+    setCheckingButton(true);
+    setSubtitle("", false);
+
+    glow.classList.add("scanning");
+
+    /*
+     * Stage 1:
+     * One small rotating circle.
+     */
+    showLoader(1);
+
+    /*
+     * Stage 2:
+     * Four coloured circles.
+     */
+    setTimeout(() => {
+      if (checking) showLoader(2);
+    }, 1200);
+
+    /*
+     * Stage 3:
+     * One different coloured circle.
+     */
+    setTimeout(() => {
+      if (checking) showLoader(3);
+    }, 2400);
+
+    try {
+
+      /*
+       * Read both sources while the animation runs.
+       */
+      const versionPromise = getAndroidVersion();
+      const manifestPromise = fetchManifest();
+
+      const [version, latest] = await Promise.all([
+        versionPromise,
+        manifestPromise
+      ]);
+
+      appInfo = version;
+
+      /*
+       * Minimum visual duration.
+       * Keeps the Samsung-style animation from ending abruptly.
+       */
+      await new Promise(resolve => setTimeout(resolve, 3300));
+
+      if (!checking) return;
+
+      /*
+       * IMPORTANT:
+       *
+       * versionCode is authoritative.
+       *
+       * Installed:
+       *   1.0 / 1
+       *
+       * Website:
+       *   1.1 / 2
+       *
+       * Result:
+       *   Update available
+       */
+      if (latest.versionCode > appInfo.versionCode) {
+
+        applyManifest(latest);
+
+        glow.classList.remove("scanning");
+        clearLoader();
+        setCheckingButton(false);
+
+        viewChecking.classList.add("hidden");
+
+        requestAnimationFrame(() => {
+          viewUpdate.classList.add("active");
+        });
+
+      } else {
+
+        /*
+         * No update.
+         */
+        checking = false;
+
+        glow.classList.remove("scanning");
+        clearLoader();
+        setCheckingButton(false);
+
+        setSubtitle(
+          "You are at latest software",
+          true
+        );
+      }
+
+    } catch (error) {
+
+      console.error(
+        "Next UI update check failed:",
+        error
+      );
+
+      /*
+       * Do not pretend an update exists if the server
+       * could not be contacted.
+       */
+      checking = false;
+
+      glow.classList.remove("scanning");
+      clearLoader();
+      setCheckingButton(false);
+
+      setSubtitle(
+        "Couldn't check for updates",
+        true
+      );
+    }
+  }
+
+
+  /* ----------------------------------------------------------
+     DOWNLOAD UPDATE
+     ---------------------------------------------------------- */
+
+  function downloadUpdate() {
+
+    if (!manifest || !manifest.downloadUrl) {
+      downloadStatus.textContent =
+        "Update download is unavailable.";
+      downloadStatus.classList.add("show");
+      return;
+    }
+
+    const url = manifest.downloadUrl;
+
+    let parsed;
+
+    try {
+      parsed = new URL(url);
+    } catch (_) {
+      downloadStatus.textContent =
+        "Invalid update download.";
+      downloadStatus.classList.add("show");
+      return;
+    }
+
+    /*
+     * Final client-side safety check.
+     */
+    if (
+      parsed.protocol !== "https:" ||
+      parsed.hostname.toLowerCase() !== ALLOWED_DOWNLOAD_HOST
+    ) {
+      downloadStatus.textContent =
+        "This update source is not allowed.";
+      downloadStatus.classList.add("show");
+      return;
+    }
+
+    const bridge = getAndroidBridge();
+
+    /*
+     * Android application handles the actual download.
+     */
+    if (
+      bridge &&
+      typeof bridge.downloadUpdate === "function"
+    ) {
+
+      try {
+
+        bridge.downloadUpdate(url);
+
+        downloadButton.disabled = true;
+        downloadButton.textContent = "Downloading…";
+
+        downloadStatus.textContent =
+          "Download started in the app.";
+        downloadStatus.classList.add("show");
+
+        return;
+
+      } catch (error) {
+
+        console.error(
+          "Android download handoff failed.",
+          error
+        );
+
+        downloadButton.disabled = false;
+        downloadButton.textContent = "Update";
+
+        downloadStatus.textContent =
+          "Couldn't start the download.";
+        downloadStatus.classList.add("show");
+
+        return;
+      }
+    }
+
+    /*
+     * Browser fallback.
+     *
+     * In the real Android app, AndroidUpdate.downloadUpdate()
+     * should always be present.
+     */
+    window.location.href = url;
+  }
+
+
+  /* ----------------------------------------------------------
+     BACK / RESET
+     ---------------------------------------------------------- */
+
+  function resetToHome() {
+
+    checking = false;
+
+    clearLoader();
+
+    glow.classList.remove("scanning");
+
+    setCheckingButton(false);
+
+    btnText.textContent = "Check for updates";
+
+    setSubtitle("", false);
+
+    viewUpdate.classList.remove("active");
+    viewChecking.classList.remove("hidden");
+
+    downloadButton.disabled = false;
+    downloadButton.textContent = "Update";
+
+    downloadStatus.textContent = "";
+    downloadStatus.classList.remove("show");
+  }
+
+
+  /* ----------------------------------------------------------
+     ANDROID CALLBACKS
+     ---------------------------------------------------------- */
+
+  /*
+   * Android can call:
+   *
+   * window.onUpdateDownloadStarted()
+   */
+  window.onUpdateDownloadStarted = function() {
+
+    downloadButton.disabled = true;
+    downloadButton.textContent = "Downloading…";
+
+    downloadStatus.textContent =
+      "Downloading update…";
+
+    downloadStatus.classList.add("show");
+  };
+
+
+  /*
+   * Android can call:
+   *
+   * window.onUpdateDownloadProgress(57)
+   */
+  window.onUpdateDownloadProgress = function(percent) {
+
+    const value = Math.max(
+      0,
+      Math.min(100, Number(percent) || 0)
+    );
+
+    downloadButton.disabled = true;
+
+    downloadButton.textContent =
+      "Downloading " + Math.round(value) + "%";
+
+    downloadStatus.textContent =
+      "Downloading update…";
+    downloadStatus.classList.add("show");
+  };
+
+
+  /*
+   * Android can call:
+   *
+   * window.onUpdateDownloadCompleted()
+   */
+  window.onUpdateDownloadCompleted = function() {
+
+    downloadButton.disabled = false;
+    downloadButton.textContent = "Update downloaded";
+
+    downloadStatus.textContent =
+      "Download complete. Android will open the installer.";
+    downloadStatus.classList.add("show");
+  };
+
+
+  /*
+   * Android can call:
+   *
+   * window.onUpdateDownloadFailed("Network error")
+   */
+  window.onUpdateDownloadFailed = function(message) {
+
+    downloadButton.disabled = false;
+    downloadButton.textContent = "Update";
+
+    downloadStatus.textContent =
+      message || "Download failed. Please try again.";
+
+    downloadStatus.classList.add("show");
+  };
+
+
+  /*
+   * Android Back button can call:
+   *
+   * window.NextUIUpdateBack()
+   */
+  window.NextUIUpdateBack = function() {
+
+    const bridge = getAndroidBridge();
+
+    if (
+      bridge &&
+      typeof bridge.goBack === "function"
+    ) {
+      try {
+        bridge.goBack();
+        return;
+      } catch (_) {}
+    }
+
+    resetToHome();
+  };
+
+
+  /* ----------------------------------------------------------
+     GLOBAL FUNCTIONS
+     ----------------------------------------------------------
+     Required because the HTML buttons use onclick="..."
+     ---------------------------------------------------------- */
+
+  window.runCheckSequence = runCheckSequence;
+  window.downloadUpdate = downloadUpdate;
+  window.resetToHome = resetToHome;
+
+
+  /* ----------------------------------------------------------
+     INITIAL VERSION READ
+     ----------------------------------------------------------
+     We do NOT automatically check for an update.
+     The user must press "Check for updates".
+     ---------------------------------------------------------- */
+
+  getAndroidVersion()
+    .then(version => {
+      appInfo = version;
+    })
+    .catch(() => {
+      appInfo = {
+        versionName: FALLBACK_VERSION_NAME,
+        versionCode: FALLBACK_VERSION_CODE
+      };
+    });
+
+})();
+</script>
+
+</body>
+</html>
