@@ -17,9 +17,16 @@ import {
   updateDoc,
   setDoc,
   getDoc,
+  getDocs,
   serverTimestamp,
   Timestamp,
 } from "firebase/firestore";
+import {
+  getStorage,
+  ref as storageRef,
+  uploadBytes,
+  getDownloadURL,
+} from "firebase/storage";
 
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -55,6 +62,17 @@ interface ChatMessage {
   createdAt: Timestamp | null;
   replyTo?: { id: string; text: string; senderName: string } | null;
   seenBy?: string[];
+  deleted?: boolean;
+  deletedBy?: string;
+  imageUrl?: string | null;
+}
+
+/** Position (viewport px) where a long-press / right-click action menu should open. */
+interface ActionMenuState {
+  msg: ChatMessage;
+  x: number;
+  y: number;
+  own: boolean;
 }
 
 interface PrivateConversation {
@@ -137,6 +155,26 @@ const Icon = {
       <path d="M18 6 6 18M6 6l12 12" />
     </svg>
   ),
+  Copy: () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="9" width="13" height="13" rx="2.5" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  ),
+  Trash: () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 6h18" />
+      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6M14 11v6" />
+    </svg>
+  ),
+  NewChat: () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 20a8 8 0 1 0-6.93-4" />
+      <path d="M12 8v6M9 11h6" />
+    </svg>
+  ),
 };
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -187,6 +225,51 @@ function initialsOf(name: string) {
     .slice(0, 2)
     .map((n) => n[0]?.toUpperCase())
     .join("");
+}
+
+/** True if `text` @-mentions the given display name (case-insensitive, word-boundary). */
+function mentionsUser(text: string, name: string | null | undefined) {
+  if (!text || !name) return false;
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`@${escaped}\\b`, "i");
+  return re.test(text);
+}
+
+/** Long-press (touch) + right-click (desktop) detector. Fires `onTrigger(x, y)`
+ *  once the press has been held for `holdMs` without significant movement. */
+function useLongPress(onTrigger: (x: number, y: number) => void, holdMs = 420) {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const moved = useRef(false);
+  const start = useRef({ x: 0, y: 0 });
+
+  const clear = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+  };
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    moved.current = false;
+    const t = e.touches[0];
+    start.current = { x: t.clientX, y: t.clientY };
+    clear();
+    timer.current = setTimeout(() => {
+      if (!moved.current) onTrigger(t.clientX, t.clientY);
+    }, holdMs);
+  };
+  const onTouchMove = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    if (Math.abs(t.clientX - start.current.x) > 10 || Math.abs(t.clientY - start.current.y) > 10) {
+      moved.current = true;
+      clear();
+    }
+  };
+  const onTouchEnd = () => clear();
+  const onContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    onTrigger(e.clientX, e.clientY);
+  };
+
+  return { onTouchStart, onTouchMove, onTouchEnd, onContextMenu };
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -295,9 +378,31 @@ const MessageBubble: React.FC<{
   msg: ChatMessage;
   own: boolean;
   showSender: boolean;
+  mentioned: boolean;
   onReply: (m: ChatMessage) => void;
-}> = ({ msg, own, showSender, onReply }) => {
+  onOpenActions: (m: ChatMessage, x: number, y: number, own: boolean) => void;
+}> = ({ msg, own, showSender, mentioned, onReply, onOpenActions }) => {
   const [showActions, setShowActions] = useState(false);
+  const longPress = useLongPress((x, y) => onOpenActions(msg, x, y, own));
+
+  if (msg.deleted) {
+    return (
+      <div className={`ntf-msg-row ${own ? "is-own" : "is-other"}`}>
+        {!own && showSender && (
+          <div className="ntf-msg-avatar">
+            <Avatar name={msg.senderName} photo={msg.senderPhoto} size={30} />
+          </div>
+        )}
+        <div className={`ntf-bubble-col ${!own && !showSender ? "ntf-bubble-indent" : ""}`}>
+          <div className="ntf-bubble ntf-bubble-deleted">
+            <span className="ntf-bubble-text">
+              This message was deleted by {msg.deletedBy || msg.senderName}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -312,14 +417,23 @@ const MessageBubble: React.FC<{
       )}
       <div className={`ntf-bubble-col ${!own && !showSender ? "ntf-bubble-indent" : ""}`}>
         {!own && showSender && <span className="ntf-msg-sender">{msg.senderName}</span>}
-        <div className={`ntf-bubble ${own ? "ntf-bubble-own" : "ntf-bubble-other"}`}>
+        <div
+          className={`ntf-bubble ${own ? "ntf-bubble-own" : "ntf-bubble-other"} ${mentioned ? "ntf-bubble-mentioned" : ""}`}
+          onTouchStart={longPress.onTouchStart}
+          onTouchMove={longPress.onTouchMove}
+          onTouchEnd={longPress.onTouchEnd}
+          onContextMenu={longPress.onContextMenu}
+        >
           {msg.replyTo && (
             <div className="ntf-reply-preview">
               <span className="ntf-reply-name">{msg.replyTo.senderName}</span>
               <span className="ntf-reply-text">{msg.replyTo.text}</span>
             </div>
           )}
-          <span className="ntf-bubble-text">{msg.text}</span>
+          {msg.imageUrl && (
+            <img src={msg.imageUrl} alt="Shared" className="ntf-bubble-image" />
+          )}
+          {msg.text && <span className="ntf-bubble-text">{msg.text}</span>}
           <span className="ntf-bubble-time">
             {formatTime(msg.createdAt)}
             {own && (
@@ -342,6 +456,48 @@ const MessageBubble: React.FC<{
 };
 
 /* ════════════════════════════════════════════════════════════════════════
+   MESSAGE ACTION MENU  — long-press / right-click popup (Copy, Reply, Delete)
+   ════════════════════════════════════════════════════════════════════════ */
+
+const MessageActionMenu: React.FC<{
+  state: ActionMenuState;
+  canDelete: boolean;
+  onCopy: () => void;
+  onReply: () => void;
+  onDelete: () => void;
+  onClose: () => void;
+}> = ({ state, canDelete, onCopy, onReply, onDelete, onClose }) => {
+  // Clamp so the menu never renders off-screen.
+  const width = 190;
+  const vw = typeof window !== "undefined" ? window.innerWidth : 400;
+  const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+  const left = Math.min(Math.max(12, state.x - width / 2), vw - width - 12);
+  const top = Math.min(state.y + 12, vh - 180);
+
+  return (
+    <div className="ntf-action-overlay" onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }}>
+      <div
+        className="ntf-action-menu"
+        style={{ left, top }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button className="ntf-action-item" onClick={onCopy}>
+          <Icon.Copy /> <span>Copy text</span>
+        </button>
+        <button className="ntf-action-item" onClick={onReply}>
+          <Icon.Reply /> <span>Reply</span>
+        </button>
+        {canDelete && (
+          <button className="ntf-action-item ntf-action-danger" onClick={onDelete}>
+            <Icon.Trash /> <span>Delete</span>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* ════════════════════════════════════════════════════════════════════════
    TYPING DOTS
    ════════════════════════════════════════════════════════════════════════ */
 
@@ -358,6 +514,14 @@ const TypingDots: React.FC = () => (
 const Chat: React.FC = () => {
   const { user: currentUser, loading: authLoading } = useAuth();
   const { isPremium } = usePremium();
+  // NOTE: adjust these field names to match whatever your AuthContext actually
+  // exposes for admin/owner detection (e.g. currentUser.role, currentUser.isOwner).
+  const isAdmin =
+    (currentUser as any)?.isAdmin ||
+    (currentUser as any)?.isOwner ||
+    (currentUser as any)?.role === "admin" ||
+    (currentUser as any)?.role === "owner" ||
+    false;
   const { privateUnread, markCommunityRead, resetPrivateUnread } = useUnread();
   const [category, setCategory] = useState<ChatCategory>("community");
 
@@ -370,8 +534,20 @@ const Chat: React.FC = () => {
 
   const [draft, setDraft] = useState("");
   const [replyTarget, setReplyTarget] = useState<ChatMessage | null>(null);
+  const [actionMenu, setActionMenu] = useState<ActionMenuState | null>(null);
   const [convoSearch, setConvoSearch] = useState("");
   const [sending, setSending] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [userPicker, setUserPicker] = useState(false);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const storage = useMemo(() => {
+    try {
+      return getStorage();
+    } catch {
+      return null;
+    }
+  }, []);
 
   // Mobile: whether the conversation panel is open over the list.
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
@@ -582,6 +758,176 @@ const Chat: React.FC = () => {
     }
   }, [draft, currentUser, sending, category, activeConvoId, activeConvo, replyTarget]);
 
+  /** Path to the Firestore collection the currently active list lives in. */
+  const activeCollectionPath = useCallback((): [string, ...string[]] | null => {
+    if (category === "community") return ["communityMessages"];
+    if (activeConvoId) return ["privateChats", activeConvoId, "messages"];
+    return null;
+  }, [category, activeConvoId]);
+
+  /** Tapping "Reply" — opens the reply preview bar AND drops "@Name " into the
+   *  composer so the mention is sent as part of the message text. */
+  const handleReply = useCallback((m: ChatMessage) => {
+    setReplyTarget(m);
+    setActionMenu(null);
+    setDraft((prev) => {
+      const mention = `@${m.senderName} `;
+      // Don't stack a second mention if one is already typed at the start.
+      if (prev.trimStart().startsWith(`@${m.senderName}`)) return prev;
+      return mention + prev;
+    });
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (el) {
+        el.focus();
+        el.selectionStart = el.selectionEnd = el.value.length;
+      }
+    });
+  }, []);
+
+  const handleCopyText = useCallback((m: ChatMessage) => {
+    setActionMenu(null);
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(m.text).catch(() => {});
+    }
+  }, []);
+
+  /** Soft-deletes a message in place — keeps the doc, marks it deleted, and
+   *  swaps its rendering for "This message was deleted by …". */
+  const handleDeleteMessage = useCallback(
+    async (m: ChatMessage) => {
+      setActionMenu(null);
+      const path = activeCollectionPath();
+      if (!path || !currentUser) return;
+      try {
+        await updateDoc(doc(db, ...path, m.id), {
+          deleted: true,
+          deletedBy: currentUser.displayName || "Someone",
+          text: "",
+        });
+      } catch {
+        /* best-effort — surfaced via existing error UI if the write fails */
+      }
+    },
+    [activeCollectionPath, currentUser]
+  );
+
+  const openActionMenu = useCallback(
+    (m: ChatMessage, x: number, y: number, own: boolean) => {
+      setActionMenu({ msg: m, x, y, own });
+    },
+    []
+  );
+
+  /** Lazily loads the user directory the first time "New chat" is opened. */
+  const openUserPicker = useCallback(async () => {
+    setUserPicker(true);
+    if (allUsers.length > 0 || !currentUser) return;
+    try {
+      const snap = await getDocs(query(collection(db, "users"), limit(50)));
+      const rows: UserProfile[] = snap.docs
+        .map((d) => {
+          const u = d.data() as any;
+          return {
+            uid: d.id,
+            displayName: u.name || u.displayName || "Student",
+            photoURL: u.photoURL || null,
+            online: u.isOnline ?? u.online ?? false,
+          };
+        })
+        .filter((u) => u.uid !== currentUser.uid);
+      setAllUsers(rows);
+    } catch {
+      /* best-effort — existing empty-state UI covers this */
+    }
+  }, [allUsers.length, currentUser]);
+
+  /** Opens (or re-opens) a private conversation with `u` without waiting for
+   *  a privateChatMeta doc to exist yet — one gets created on first send. */
+  const handleStartChat = useCallback(
+    (u: UserProfile) => {
+      if (!currentUser) return;
+      const id = chatIdFor(currentUser.uid, u.uid);
+      const existing = conversations.find((c) => c.id === id);
+      const convo: PrivateConversation =
+        existing || {
+          id,
+          participants: [currentUser.uid, u.uid],
+          otherUser: u,
+          lastMessage: "",
+          lastMessageAt: null,
+          unreadCount: 0,
+        };
+      setUserPicker(false);
+      openConversation(convo);
+    },
+    [currentUser, conversations]
+  );
+
+  const handlePickImage = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  /** Uploads the chosen image to Storage, then writes a normal chat message
+   *  pointing at it — mirrors handleSend's Firestore write for each category. */
+  const handleImageSelected = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = "";
+      if (!file || !currentUser || !storage) return;
+      if (category === "private" && !(activeConvoId && activeConvo)) return;
+
+      setUploadingImage(true);
+      try {
+        const folder = category === "community" ? "community" : activeConvoId;
+        const path = `chatImages/${folder}/${Date.now()}_${file.name}`;
+        const ref = storageRef(storage, path);
+        await uploadBytes(ref, file);
+        const url = await getDownloadURL(ref);
+
+        if (category === "community") {
+          await addDoc(collection(db, "communityMessages"), {
+            message: "",
+            text: "",
+            imageUrl: url,
+            senderId: currentUser.uid,
+            senderName: currentUser.displayName || "Student",
+            senderPhoto: currentUser.photoURL || null,
+            createdAt: serverTimestamp(),
+            replyTo: null,
+          });
+        } else if (activeConvoId && activeConvo) {
+          await addDoc(collection(db, "privateChats", activeConvoId, "messages"), {
+            message: "",
+            text: "",
+            imageUrl: url,
+            senderId: currentUser.uid,
+            senderName: currentUser.displayName || "Student",
+            senderPhoto: currentUser.photoURL || null,
+            createdAt: serverTimestamp(),
+            replyTo: null,
+            seenBy: [],
+          });
+          await setDoc(
+            doc(db, "privateChatMeta", activeConvoId),
+            {
+              participants: activeConvo.participants,
+              lastMessage: "📷 Photo",
+              lastMessageAt: serverTimestamp(),
+              [`unread_${activeConvo.otherUser.uid}`]: (activeConvo.unreadCount || 0) + 1,
+            },
+            { merge: true }
+          );
+        }
+      } catch {
+        /* best-effort — surfaced via existing error UI if the upload fails */
+      } finally {
+        setUploadingImage(false);
+      }
+    },
+    [currentUser, storage, category, activeConvoId, activeConvo]
+  );
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -610,7 +956,9 @@ const Chat: React.FC = () => {
             msg={m}
             own={m.senderId === currentUser?.uid}
             showSender={showSender}
-            onReply={setReplyTarget}
+            mentioned={mentionsUser(m.text, currentUser?.displayName)}
+            onReply={handleReply}
+            onOpenActions={openActionMenu}
           />
         </React.Fragment>
       );
@@ -662,24 +1010,53 @@ const Chat: React.FC = () => {
                   value={convoSearch}
                   onChange={(e) => setConvoSearch(e.target.value)}
                 />
+                <button className="ntf-icon-btn ntf-new-chat-btn" aria-label="New chat" onClick={openUserPicker}>
+                  <Icon.NewChat />
+                </button>
               </div>
 
-              <div className="ntf-convo-list">
-                {filteredConversations.length === 0 && (
-                  <div className="ntf-empty-hint">
-                    <Icon.Lock />
-                    <p>No private chats yet.<br />Start one from a profile card.</p>
-                  </div>
-                )}
-                {filteredConversations.map((c) => (
-                  <ConversationItem
-                    key={c.id}
-                    convo={c}
-                    active={c.id === activeConvoId}
-                    onClick={() => openConversation(c)}
-                  />
-                ))}
-              </div>
+              {userPicker ? (
+                <div className="ntf-convo-list">
+                  <button className="ntf-picker-back" onClick={() => setUserPicker(false)}>
+                    <Icon.Back /> <span>Back to chats</span>
+                  </button>
+                  {allUsers.length === 0 && (
+                    <div className="ntf-empty-hint">
+                      <p>No other students found yet.</p>
+                    </div>
+                  )}
+                  {allUsers.map((u) => (
+                    <button key={u.uid} className="ntf-convo-item" onClick={() => handleStartChat(u)}>
+                      <Avatar name={u.displayName} photo={u.photoURL} online={u.online} />
+                      <div className="ntf-convo-meta">
+                        <div className="ntf-convo-top">
+                          <span className="ntf-convo-name">{u.displayName}</span>
+                        </div>
+                        <div className="ntf-convo-bottom">
+                          <span className="ntf-convo-preview">{u.online ? "Online" : "Tap to message"}</span>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="ntf-convo-list">
+                  {filteredConversations.length === 0 && (
+                    <div className="ntf-empty-hint">
+                      <Icon.Lock />
+                      <p>No private chats yet.<br />Tap + to start one.</p>
+                    </div>
+                  )}
+                  {filteredConversations.map((c) => (
+                    <ConversationItem
+                      key={c.id}
+                      convo={c}
+                      active={c.id === activeConvoId}
+                      onClick={() => openConversation(c)}
+                    />
+                  ))}
+                </div>
+              )}
             </>
           )}
 
@@ -742,7 +1119,10 @@ const Chat: React.FC = () => {
                       </div>
                       <button
                         className="ntf-icon-btn ntf-replying-close"
-                        onClick={() => setReplyTarget(null)}
+                        onClick={() => {
+                          setDraft((prev) => prev.replace(`@${replyTarget.senderName} `, ""));
+                          setReplyTarget(null);
+                        }}
                         aria-label="Cancel reply"
                       >
                         <Icon.Close />
@@ -750,8 +1130,20 @@ const Chat: React.FC = () => {
                     </div>
                   )}
                   <div className="ntf-composer-row">
-                    <button className="ntf-icon-btn ntf-add-btn" aria-label="Add attachment">
-                      <Icon.Plus />
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      style={{ display: "none" }}
+                      onChange={handleImageSelected}
+                    />
+                    <button
+                      className="ntf-icon-btn ntf-add-btn"
+                      aria-label="Add attachment"
+                      onClick={handlePickImage}
+                      disabled={uploadingImage}
+                    >
+                      {uploadingImage ? <span className="ntf-mini-spinner" /> : <Icon.Plus />}
                     </button>
                     <textarea
                       ref={textareaRef}
@@ -787,6 +1179,17 @@ const Chat: React.FC = () => {
         )}
       </div>
 
+      {actionMenu && (
+        <MessageActionMenu
+          state={actionMenu}
+          canDelete={actionMenu.own || isAdmin}
+          onCopy={() => handleCopyText(actionMenu.msg)}
+          onReply={() => handleReply(actionMenu.msg)}
+          onDelete={() => handleDeleteMessage(actionMenu.msg)}
+          onClose={() => setActionMenu(null)}
+        />
+      )}
+
       <ChatStyles />
     </div>
   );
@@ -810,6 +1213,7 @@ const ChatStyles: React.FC = () => (
   :root {
     --ntf-ease: cubic-bezier(0.22, 1, 0.36, 1);
     --ntf-ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
+    --ntf-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
     --ntf-bg-void: #08050f;
     --ntf-bg-deep: #100a1e;
     --ntf-surface: rgba(255,255,255,0.045);
@@ -823,9 +1227,9 @@ const ChatStyles: React.FC = () => (
     --ntf-text: #f3eefc;
     --ntf-text-muted: #a89bc4;
     --ntf-text-faint: #6f6489;
-    --ntf-radius-lg: 22px;
-    --ntf-radius-md: 16px;
-    --ntf-radius-sm: 12px;
+    --ntf-radius-lg: 30px;
+    --ntf-radius-md: 22px;
+    --ntf-radius-sm: 16px;
   }
 
   .ntf-chat-app {
@@ -1061,10 +1465,10 @@ const ChatStyles: React.FC = () => (
 
   .ntf-msg-row {
     display: flex; align-items: flex-end; gap: 8px; margin: 3px 0;
-    animation: ntf-msg-in 0.34s var(--ntf-ease) both;
+    animation: ntf-msg-in 0.42s var(--ntf-ease-spring) both;
   }
   @keyframes ntf-msg-in {
-    from { opacity: 0; transform: translateY(10px) scale(0.98); }
+    from { opacity: 0; transform: translateY(14px) scale(0.94); }
     to { opacity: 1; transform: translateY(0) scale(1); }
   }
   .ntf-msg-row.is-own { justify-content: flex-end; }
@@ -1184,6 +1588,76 @@ const ChatStyles: React.FC = () => (
   .ntf-send-btn.is-ready:hover { transform: scale(1.06); }
   .ntf-send-btn:active:not(:disabled) { transform: scale(0.9); }
   .ntf-send-btn:disabled { cursor: not-allowed; }
+
+  /* ── deleted message placeholder ── */
+  .ntf-bubble-deleted {
+    background: transparent; border: 1px dashed var(--ntf-border);
+    color: var(--ntf-text-faint); font-style: italic; padding: 9px 13px;
+  }
+
+  /* ── @mention highlight — glows softly for the mentioned viewer only ── */
+  .ntf-bubble-mentioned {
+    box-shadow: 0 0 0 2px var(--ntf-violet-2), 0 6px 20px rgba(167, 139, 250, 0.35);
+    animation: ntf-mention-pulse 2.2s var(--ntf-ease-soft) infinite;
+  }
+  @keyframes ntf-mention-pulse {
+    0%, 100% { box-shadow: 0 0 0 2px var(--ntf-violet-2), 0 6px 20px rgba(167, 139, 250, 0.25); }
+    50% { box-shadow: 0 0 0 2px var(--ntf-violet-2), 0 6px 26px rgba(167, 139, 250, 0.5); }
+  }
+
+  /* ── shared message image ── */
+  .ntf-bubble-image {
+    max-width: 220px; width: 100%; border-radius: var(--ntf-radius-sm);
+    margin-bottom: 6px; display: block; object-fit: cover;
+  }
+
+  /* ── long-press / right-click action menu ── */
+  .ntf-action-overlay {
+    position: fixed; inset: 0; z-index: 50; background: rgba(5, 2, 12, 0.35);
+    backdrop-filter: blur(2px); animation: ntf-fade-in 0.16s var(--ntf-ease-soft) both;
+  }
+  @keyframes ntf-fade-in { from { opacity: 0; } to { opacity: 1; } }
+  .ntf-action-menu {
+    position: fixed; min-width: 190px; display: flex; flex-direction: column; gap: 2px;
+    background: var(--ntf-bg-deep); border: 1px solid var(--ntf-border);
+    border-radius: var(--ntf-radius-md); padding: 6px; box-shadow: 0 16px 40px rgba(0,0,0,0.5);
+    animation: ntf-menu-pop 0.22s var(--ntf-ease-spring) both;
+  }
+  @keyframes ntf-menu-pop {
+    from { opacity: 0; transform: scale(0.85) translateY(-6px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .ntf-action-item {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: none;
+    background: transparent; color: var(--ntf-text); font-family: inherit; font-weight: 700;
+    font-size: 13.5px; border-radius: var(--ntf-radius-sm); cursor: pointer; text-align: left;
+    transition: background 0.18s var(--ntf-ease-soft), transform 0.14s var(--ntf-ease-soft);
+  }
+  .ntf-action-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+  .ntf-action-item:hover { background: var(--ntf-surface-2); }
+  .ntf-action-item:active { transform: scale(0.97); }
+  .ntf-action-danger { color: #fb7185; }
+  .ntf-action-danger:hover { background: rgba(251, 113, 133, 0.12); }
+
+  /* ── new-chat / user-picker ── */
+  .ntf-new-chat-btn { width: 30px; height: 30px; flex-shrink: 0; }
+  .ntf-new-chat-btn svg { width: 15px; height: 15px; }
+  .ntf-picker-back {
+    display: flex; align-items: center; gap: 8px; padding: 10px 8px; margin-bottom: 4px;
+    border: none; background: transparent; color: var(--ntf-text-muted); font-family: inherit;
+    font-weight: 700; font-size: 13px; cursor: pointer; border-radius: var(--ntf-radius-sm);
+    transition: background 0.2s var(--ntf-ease-soft);
+  }
+  .ntf-picker-back:hover { background: var(--ntf-surface); color: var(--ntf-text); }
+  .ntf-picker-back svg { width: 15px; height: 15px; }
+
+  /* ── mini spinner for image upload ── */
+  .ntf-mini-spinner {
+    width: 15px; height: 15px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.25); border-top-color: var(--ntf-violet-2);
+    animation: ntf-spin 0.7s linear infinite;
+  }
+  @keyframes ntf-spin { to { transform: rotate(360deg); } }
 
   /* focus visibility for keyboard users */
   button:focus-visible, input:focus-visible, textarea:focus-visible {
