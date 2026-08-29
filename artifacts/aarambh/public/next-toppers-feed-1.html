@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Next Toppers Feed</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B0E1A;
+    --bg-elev:#12162A;
+    --bg-elev-2:#181D35;
+    --line:#242A47;
+    --text:#EEF0FA;
+    --text-dim:#9AA1C4;
+    --text-faint:#6B7199;
+    --violet:#7C5CFF;
+    --violet-soft:#7C5CFF33;
+    --lime:#C4FF61;
+    --gold:#FFC24B;
+    --danger:#FF5C7A;
+    --spring: cubic-bezier(0.34, 1.35, 0.64, 1);
+    --spring-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0; height:100%; overscroll-behavior:none;}
+  body{
+    background:radial-gradient(120% 100% at 50% 0%, #151a34 0%, var(--bg) 55%);
+    color:var(--text);
+    font-family:'Inter', sans-serif;
+    -webkit-font-smoothing:antialiased;
+    display:flex; justify-content:center;
+  }
+  #app{
+    width:100%; max-width:480px; min-height:100vh;
+    position:relative; overflow-x:hidden;
+    background:var(--bg);
+    box-shadow:0 0 60px rgba(0,0,0,0.5);
+    padding-bottom:40px;
+  }
+  h1,h2,h3{font-family:'Outfit', sans-serif; margin:0;}
+  ::-webkit-scrollbar{display:none;}
+  * {scrollbar-width:none;}
+
+  /* ---------- TOP BAR ---------- */
+  header.topbar{
+    position:sticky; top:0; z-index:20;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 16px;
+    background:rgba(11,14,26,0.85);
+    backdrop-filter:blur(14px);
+    border-bottom:1px solid var(--line);
+  }
+  .brand{display:flex; align-items:center; gap:10px;}
+  .brand-mark{
+    width:32px; height:32px; border-radius:10px;
+    background:linear-gradient(135deg, var(--violet), #4A2FD9);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Outfit'; font-weight:800; font-size:14px; color:#fff;
+    box-shadow:0 4px 14px var(--violet-soft);
+  }
+  .brand b{font-size:14.5px; font-weight:700;}
+  .brand small{display:block; font-size:10.5px; color:var(--text-faint); font-weight:500;}
+  .icon-btn{
+    width:36px; height:36px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--bg-elev); border:1px solid var(--line);
+    color:var(--text-dim); cursor:pointer;
+    transition:transform .35s var(--spring), background .2s;
+  }
+  .icon-btn:active{transform:scale(0.86);}
+
+  /* ---------- HERO ---------- */
+  .hero{
+    display:flex; align-items:flex-end; gap:14px;
+    padding:22px 20px 16px;
+    opacity:0; transform:translateY(14px);
+    animation:riseIn .55s var(--spring-soft) forwards;
+  }
+  @keyframes riseIn{ to{opacity:1; transform:translateY(0);} }
+  .hero-icon{
+    width:88px; height:88px; border-radius:24px; flex:none;
+    background:linear-gradient(135deg, var(--violet), #4A2FD9, var(--lime) 130%);
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 14px 32px -8px rgba(124,92,255,0.45);
+    position:relative;
+    animation:iconPop .6s var(--spring);
+  }
+  @keyframes iconPop{ from{transform:scale(0.5) rotate(-12deg); opacity:0;} to{transform:scale(1) rotate(0); opacity:1;} }
+  .hero-icon svg{width:44px; height:44px;}
+  .hero-text h1{font-size:21px; font-weight:700; letter-spacing:-0.3px;}
+  .hero-text .dev{font-size:13px; color:var(--text-dim); margin-top:3px;}
+  .hero-text .ver-badge{
+    display:inline-block; margin-top:6px; padding:3px 10px; border-radius:100px;
+    background:var(--bg-elev); border:1px solid var(--line); font-size:11px; color:var(--lime); font-weight:700;
+  }
+
+  .stat-row{
+    display:flex; padding:14px 20px 6px; gap:0;
+    opacity:0; animation:riseIn .55s var(--spring-soft) .08s forwards;
+  }
+  .stat{flex:1; text-align:center; border-right:1px solid var(--line);}
+  .stat:last-child{border-right:none;}
+  .stat b{display:block; font-size:14.5px; font-family:'Outfit'; font-weight:700;}
+  .stat span{font-size:11px; color:var(--text-faint);}
+  .stars-small{color:var(--gold);}
+
+  .install-zone{padding:16px 20px 4px; opacity:0; animation:riseIn .55s var(--spring-soft) .14s forwards;}
+  .install-btn{
+    width:100%; height:48px; border-radius:14px; border:none;
+    background:var(--violet); color:#fff; font-weight:700; font-size:15px;
+    font-family:'Inter'; cursor:pointer; position:relative; overflow:hidden;
+    transition:background .3s var(--spring), transform .2s var(--spring);
+  }
+  .install-btn:active{transform:scale(0.97);}
+  .install-btn .fill{
+    position:absolute; left:0; top:0; bottom:0; width:0%;
+    background:linear-gradient(90deg, #9A82FF, var(--lime));
+    transition:width .28s linear;
+  }
+  .install-btn .label{position:relative; z-index:2;}
+  .install-btn.installed{background:var(--bg-elev-2); border:1px solid var(--line); color:var(--lime);}
+  .hint-line{text-align:center; font-size:11px; color:var(--text-faint); margin-top:8px;}
+
+  .chips{display:flex; gap:8px; padding:12px 20px 4px; flex-wrap:wrap;}
+  .chip{padding:5px 12px; border-radius:100px; background:var(--bg-elev); border:1px solid var(--line); font-size:11.5px; color:var(--text-dim);}
+
+  /* ---------- SECTIONS ---------- */
+  .section-block{padding:20px 20px 4px;}
+  .section-block h3{font-size:15px; font-weight:700; margin-bottom:10px;}
+  .about-text{font-size:13px; line-height:1.65; color:var(--text-dim); white-space:pre-line;}
+  .about-text.clamped{display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;}
+  .more-link{color:var(--violet); font-size:12.5px; font-weight:700; margin-top:8px; cursor:pointer; display:inline-block;}
+
+  /* screenshots */
+  .shots{display:flex; gap:10px; overflow-x:auto; padding:4px 20px 6px; scroll-snap-type:x proximity;}
+  .shot{
+    flex:none; width:150px; height:266px; border-radius:16px; scroll-snap-align:start;
+    overflow:hidden; cursor:pointer; background:var(--bg-elev); border:1px solid var(--line);
+    box-shadow:0 8px 20px -6px rgba(0,0,0,0.5);
+    transition:transform .3s var(--spring);
+  }
+  .shot:active{transform:scale(0.95);}
+  .shot img{width:100%; height:100%; object-fit:cover; display:block;}
+
+  /* what's new */
+  .update-card{
+    margin:0 20px; padding:14px 16px; border-radius:16px;
+    background:var(--bg-elev); border:1px solid var(--line);
+  }
+  .update-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;}
+  .update-head b{font-size:13.5px; font-weight:700;}
+  .update-head span{font-size:11px; color:var(--text-faint);}
+  .update-list{margin:10px 0 0; padding:0; list-style:none;}
+  .update-list li{
+    position:relative; padding:6px 0 6px 18px; font-size:12.5px; color:var(--text-dim); line-height:1.5;
+  }
+  .update-list li::before{
+    content:''; position:absolute; left:0; top:13px; width:6px; height:6px; border-radius:50%;
+    background:var(--lime);
+  }
+  .update-list.clamped li:nth-child(n+6){display:none;}
+
+  hr.divider{border:none; border-top:1px solid var(--line); margin:20px 20px;}
+
+  .field{margin:0 20px 12px;}
+  .field label{font-size:12px; color:var(--text-faint); font-weight:600; display:block; margin-bottom:6px;}
+  .field input[type=text], .field textarea{
+    width:100%; padding:11px 13px; border-radius:12px; border:1px solid var(--line);
+    background:var(--bg-elev); color:var(--text); font-family:'Inter'; font-size:13.5px; resize:none;
+  }
+  .field input:focus, .field textarea:focus{outline:none; border-color:var(--violet);}
+  .star-picker{display:flex; gap:6px; font-size:26px; color:var(--line); cursor:pointer;}
+  .star-picker span.active{color:var(--gold);}
+  .submit-btn{
+    width:calc(100% - 40px); margin:0 20px 20px; padding:13px; border-radius:14px; border:none;
+    background:var(--lime); color:#0B0E1A; font-weight:700; font-size:14px; cursor:pointer;
+    transition:transform .25s var(--spring);
+  }
+  .submit-btn:active{transform:scale(0.96);}
+
+  .footer-note{text-align:center; font-size:11px; color:var(--text-faint); padding:16px 30px 4px; line-height:1.6;}
+
+  /* 3-dot menu */
+  .menu{
+    position:absolute; top:52px; right:14px; z-index:30;
+    background:var(--bg-elev-2); border:1px solid var(--line); border-radius:16px;
+    min-width:180px; overflow:hidden; padding:6px;
+    transform:scale(0.85) translateY(-8px); transform-origin:top right;
+    opacity:0; pointer-events:none; transition:all .3s var(--spring);
+    box-shadow:0 14px 32px -8px rgba(0,0,0,0.6);
+  }
+  .menu.show{transform:scale(1) translateY(0); opacity:1; pointer-events:auto;}
+  .menu-item{
+    display:flex; align-items:center; gap:10px; padding:11px 12px; border-radius:10px;
+    font-size:13px; font-weight:500; cursor:pointer; transition:background .2s;
+  }
+  .menu-item:active{background:var(--bg-elev);}
+  .menu-item.danger{color:var(--danger);}
+
+  /* ---------- FULLSCREEN IMAGE VIEWER ---------- */
+  .viewer{
+    position:fixed; inset:0; background:rgba(4,5,12,0.97); z-index:60;
+    display:flex; align-items:center; justify-content:center;
+    opacity:0; pointer-events:none; transition:opacity .35s var(--spring-soft);
+  }
+  .viewer.show{opacity:1; pointer-events:auto;}
+  .viewer-img-wrap{width:100%; height:100%; display:flex; align-items:center; justify-content:center; overflow:hidden;}
+  .viewer img{
+    max-width:92%; max-height:78%; border-radius:14px; object-fit:contain;
+    box-shadow:0 20px 60px rgba(0,0,0,0.6);
+    transform:scale(0.85); opacity:0; transition:transform .38s var(--spring), opacity .3s var(--spring-soft);
+  }
+  .viewer.show img{transform:scale(1); opacity:1;}
+  .viewer-top{
+    position:absolute; top:16px; left:16px; right:16px; display:flex; justify-content:space-between; align-items:center;
+  }
+  .viewer-counter{color:var(--text-dim); font-size:13px; font-weight:600; background:rgba(255,255,255,0.08); padding:6px 14px; border-radius:100px;}
+  .viewer-close{
+    width:38px; height:38px; border-radius:50%; background:rgba(255,255,255,0.08);
+    display:flex; align-items:center; justify-content:center; color:#fff; cursor:pointer;
+    transition:transform .3s var(--spring);
+  }
+  .viewer-close:active{transform:scale(0.85) rotate(90deg);}
+  .viewer-nav{
+    position:absolute; top:50%; transform:translateY(-50%);
+    width:44px; height:44px; border-radius:50%; background:rgba(255,255,255,0.08);
+    display:flex; align-items:center; justify-content:center; color:#fff; cursor:pointer;
+    transition:transform .25s var(--spring), background .2s;
+  }
+  .viewer-nav:active{transform:translateY(-50%) scale(0.82);}
+  .viewer-nav.prev{left:14px;}
+  .viewer-nav.next{right:14px;}
+  .viewer-dots{position:absolute; bottom:22px; left:0; right:0; display:flex; justify-content:center; gap:7px;}
+  .viewer-dot{width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,0.25); transition:all .35s var(--spring);}
+  .viewer-dot.active{background:var(--lime); width:18px;}
+
+  /* toast */
+  .toast{
+    position:fixed; left:50%; bottom:26px; transform:translate(-50%, 30px);
+    background:#1E2340; border:1px solid var(--line); color:var(--text);
+    padding:12px 20px; border-radius:100px; font-size:13px; font-weight:600;
+    opacity:0; pointer-events:none; transition:all .4s var(--spring); z-index:70;
+    white-space:nowrap;
+  }
+  .toast.show{opacity:1; transform:translate(-50%, 0);}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark"><img src="https://nexttopper-feed.pages.dev/logo.png" alt="logo" style="width:100%;height:100%;object-fit:cover;border-radius:10px"></div>
+      <div>
+        <b>Next Toppers Feed</b>
+        <small>v1.1</small>
+      </div>
+    </div>
+    <div style="position:relative;">
+      <div class="icon-btn" onclick="toggleMenu(event)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
+      </div>
+      <div class="menu" id="menu">
+        <div class="menu-item" onclick="shareApk()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.6" x2="15.4" y2="6.4"/><line x1="8.6" y1="13.4" x2="15.4" y2="17.6"/></svg>
+          Share APK
+        </div>
+        <div class="menu-item" onclick="copyLink()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+          Copy link
+        </div>
+        <div class="menu-item" onclick="checkUpdate()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Check for update
+        </div>
+        <div class="menu-item danger" onclick="reportApp()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Report app
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="hero">
+    <div class="hero-icon">
+      <img src="https://nexttopper-feed.pages.dev/logo.png" alt="Next Toppers Feed logo" style="width:100%;height:100%;object-fit:cover;border-radius:24px">
+    </div>
+    <div class="hero-text">
+      <h1>Next Toppers Feed</h1>
+      <div class="dev">Toppers Inc. · Education</div>
+      <span class="ver-badge">Version 1.1</span>
+    </div>
+  </div>
+
+  <div class="stat-row">
+    <div class="stat"><b>1.1</b><span>Version</span></div>
+    <div class="stat"><b>Android 10+</b><span>Requires</span></div>
+    <div class="stat"><b>29 Aug</b><span>Updated</span></div>
+  </div>
+
+  <div class="install-zone">
+    <button class="install-btn" id="mainInstallBtn" onclick="mainInstall()">
+      <div class="fill" id="installFill"></div>
+      <span class="label" id="installLabel">Install</span>
+    </button>
+    <div class="hint-line">APK · Updated 29 Aug 2026</div>
+  </div>
+
+  <div class="chips">
+    <div class="chip">📚 Learning</div>
+    <div class="chip">⚡ Fast & smooth</div>
+    <div class="chip">🤖 Android 10+</div>
+  </div>
+
+  <div class="section-block">
+    <h3>About this app</h3>
+    <div class="about-text clamped" id="aboutText">Next Toppers Feed is a modern learning app designed to make studying simple, organized, and enjoyable.
+It brings educational content, resources, and useful learning tools together in one clean experience.
+The app focuses on speed, simplicity, and a smooth interface for everyday learning.
+
+Enjoy a refreshed design with polished screens, smoother animations, and improved navigation throughout the app. The latest version also brings stability improvements, performance optimizations, and several bug fixes.
+
+Built with a focus on a clean and reliable learning experience for students.</div>
+    <span class="more-link" id="aboutMore" onclick="document.getElementById('aboutText').classList.remove('clamped'); this.style.display='none'">Read more</span>
+  </div>
+
+  <div class="section-block" style="padding-left:0; padding-right:0;">
+    <h3 style="padding:0 20px;">Screenshots</h3>
+    <div class="shots" id="shots"></div>
+  </div>
+
+  <div class="section-block">
+    <h3>What's new</h3>
+    <div class="update-card">
+      <div class="update-head"><b>Version 1.1</b><span>29 Aug 2026</span></div>
+      <ul class="update-list clamped" id="updateList"></ul>
+      <span class="more-link" id="updateMore" onclick="document.getElementById('updateList').classList.remove('clamped'); this.style.display='none'">Show all changes</span>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <div class="footer-note">Next Toppers Feed · v1.1 · Works on Android 10 and above.<br>By publishing here you agree this APK is shared at your own responsibility.</div>
+
+</div>
+
+<!-- ===== FULLSCREEN IMAGE VIEWER ===== -->
+<div class="viewer" id="viewer">
+  <div class="viewer-top">
+    <div class="viewer-counter" id="viewerCounter">1 / 4</div>
+    <div class="viewer-close" onclick="closeViewer()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </div>
+  </div>
+  <div class="viewer-img-wrap">
+    <img id="viewerImg" src="" alt="screenshot preview">
+  </div>
+  <div class="viewer-nav prev" onclick="navViewer(-1)">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+  </div>
+  <div class="viewer-nav next" onclick="navViewer(1)">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+  </div>
+  <div class="viewer-dots" id="viewerDots"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===================== APP DATA ===================== */
+const APP = {
+  name:'Next Toppers Feed',
+  dev:'Toppers Inc.',
+  version:'1.1',
+  updateDate:'29 Aug 2026',
+  images:[
+    'https://nexttopper-feed.pages.dev/1.png',
+    'https://nexttopper-feed.pages.dev/2.png',
+    'https://nexttopper-feed.pages.dev/3.png',
+    'https://nexttopper-feed.pages.dev/4.png'
+  ],
+  updates:[
+    "Introduced the new Next Toppers Feed experience",
+    "Added a redesigned Next Toppers Feed app logo",
+    "Added Software Update section for easier future updates",
+    "Added automatic update checking",
+    "Added update information and release notes display",
+    "Improved overall app stability and reliability",
+    "Fixed multiple UI and functionality bugs",
+    "Improved screen transitions throughout the app",
+    "Added smoother and more responsive animations",
+    "Improved loading states and feedback",
+    "Improved WebView performance and reliability",
+    "Improved handling of network and loading errors",
+    "Improved app responsiveness on different screen sizes",
+    "Improved overall navigation experience",
+    "Optimized background processing for better performance",
+    "Improved compatibility with newer Android versions",
+    "Various minor UI improvements and refinements",
+    "Various performance and stability improvements"
+  ]
+};
+
+let installed = false;
+const GRADIENTS = ['#7C5CFF','#FF7A9C','#4FD1C5','#FFB84F','#C4FF61','#7AA7FF'];
+
+/* ===================== RENDER STATIC BLOCKS ===================== */
+function renderShots(){
+  document.getElementById('shots').innerHTML = APP.images.map((src,i)=>
+    `<div class="shot" onclick="openViewer(${i})"><img src="${src}" loading="lazy" alt="Screenshot ${i+1}"></div>`
+  ).join('');
+}
+function renderUpdates(){
+  document.getElementById('updateList').innerHTML = APP.updates.map(u=>`<li>${u}</li>`).join('');
+  if(APP.updates.length<=5) document.getElementById('updateMore').style.display='none';
+}
+renderShots();
+renderUpdates();
+
+/* ===================== MENU ===================== */
+function toggleMenu(e){ e.stopPropagation(); document.getElementById('menu').classList.toggle('show'); }
+document.addEventListener('click', (e)=>{
+  const menu = document.getElementById('menu');
+  if(menu.classList.contains('show') && !menu.contains(e.target)) menu.classList.remove('show');
+});
+function shareApk(){
+  document.getElementById('menu').classList.remove('show');
+  const url = location.href.split('#')[0];
+  if(navigator.share){
+    navigator.share({title:APP.name, text:`Check out ${APP.name} v${APP.version}`, url}).catch(()=>{});
+  } else {
+    navigator.clipboard?.writeText(url).catch(()=>{});
+    toast('Share link copied');
+  }
+}
+function copyLink(){
+  document.getElementById('menu').classList.remove('show');
+  navigator.clipboard?.writeText(location.href.split('#')[0]).catch(()=>{});
+  toast('Link copied');
+}
+function checkUpdate(){
+  document.getElementById('menu').classList.remove('show');
+  toast('You\'re on the latest version (1.1)');
+}
+function reportApp(){
+  document.getElementById('menu').classList.remove('show');
+  toast('Report submitted');
+}
+
+/* ===================== INSTALL ===================== */
+function mainInstall(){
+  if(installed){ toast('Opening ' + APP.name + '…'); return; }
+  const fill = document.getElementById('installFill');
+  const label = document.getElementById('installLabel');
+  const btn = document.getElementById('mainInstallBtn');
+  label.textContent = 'Installing…';
+  let p = 0;
+  const timer = setInterval(()=>{
+    p += Math.random()*22 + 10;
+    if(p>=100){
+      p=100; clearInterval(timer);
+      installed = true;
+      fill.style.width='100%';
+      setTimeout(()=>{
+        btn.classList.add('installed');
+        fill.style.width='0%';
+        label.textContent='Open';
+        toast('Installed successfully');
+      }, 260);
+    }
+    fill.style.width = p+'%';
+  }, 180);
+}
+
+/* ===================== FULLSCREEN VIEWER ===================== */
+let viewerIndex = 0;
+function openViewer(i){
+  viewerIndex = i;
+  updateViewer();
+  document.getElementById('viewer').classList.add('show');
+}
+function closeViewer(){ document.getElementById('viewer').classList.remove('show'); }
+function navViewer(dir){
+  viewerIndex = (viewerIndex + dir + APP.images.length) % APP.images.length;
+  updateViewer();
+}
+function updateViewer(){
+  const img = document.getElementById('viewerImg');
+  img.style.opacity = 0; img.style.transform='scale(0.85)';
+  setTimeout(()=>{
+    img.src = APP.images[viewerIndex];
+    requestAnimationFrame(()=>{ img.style.opacity=1; img.style.transform='scale(1)'; });
+  }, 120);
+  document.getElementById('viewerCounter').textContent = (viewerIndex+1) + ' / ' + APP.images.length;
+  document.getElementById('viewerDots').innerHTML = APP.images.map((_,i)=>
+    `<div class="viewer-dot ${i===viewerIndex?'active':''}"></div>`).join('');
+}
+// swipe support
+let touchStartX = null;
+document.getElementById('viewer').addEventListener('touchstart', e=>{ touchStartX = e.touches[0].clientX; });
+document.getElementById('viewer').addEventListener('touchend', e=>{
+  if(touchStartX===null) return;
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  if(Math.abs(dx) > 40) navViewer(dx > 0 ? -1 : 1);
+  touchStartX = null;
+});
+document.addEventListener('keydown', e=>{
+  if(!document.getElementById('viewer').classList.contains('show')) return;
+  if(e.key==='ArrowRight') navViewer(1);
+  if(e.key==='ArrowLeft') navViewer(-1);
+  if(e.key==='Escape') closeViewer();
+});
+
+/* ===================== TOAST ===================== */
+let toastTimer;
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=> t.classList.remove('show'), 2200);
+}
+</script>
+</body>
+</html>
